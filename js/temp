@@ -1,0 +1,11 @@
+/*
+        if (this.keyboard.isDown(Phaser.Keyboard.P)) {
+            this.food.destroy();
+            this.food = this.add.group();
+            this.food.enableBody = true;
+            this.game.numFood = 0;
+            this.game.maxFood = 10;
+            this.initializeFood();
+            console.log(this.game.numFood);
+        }
+        */

@@ -1,0 +1,152 @@
+<!doctype html> 
+<html lang="en"> 
+<head> 
+	<meta charset="UTF-8" />
+    <title>Index</title>
+    <script type="text/javascript" src="js/phaser.min.js"></script>
+    
+    <!-- TRYING TO RELEARN CSS -->
+    <style type="text/css">
+        body {
+            background-image: url(img/sky.png);
+            background-attachment: fixed;
+            background-position: center;
+        }
+        
+        #header {
+            background-color: blue;
+            color:white;
+            text-align:center;
+            padding:5px;
+        }
+        #nav {
+            line-height:30px;
+            background-color:#eeeeee;
+            height:300px;
+            width:100px;
+            float:left;
+            padding:5px;	      
+        }
+        #section_margin {
+            background-image: url(img/game_margin.png);
+            background-repeat: repeat;
+            margin-left: auto;
+            margin-right: auto;
+            padding-bottom: 10px;
+        }
+        #section {
+            background-color: #eeeeee;
+            width:800px;
+            margin-left: auto;
+            margin-right: auto;
+            padding-bottom: 5px;
+        }
+        
+        #game_margin {
+            
+        }
+        
+        #game {
+            background-image: url(img/game_margin.png);
+            width: 480px;
+            height: 480px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        #footer {
+            background-color:black;
+            color:white;
+            clear:both;
+            text-align:center;
+            padding:5px;	 	 
+        }
+        
+        h1 {
+            color: red;
+            margin-top: 10px;
+            margin-bottom: 0px;
+            margin-left: 10px
+        }
+        
+        h2 {
+            color: black;
+            margin-top: 10px;
+            margin-bottom: 0px;
+            margin-left: 10px;
+            margin-right: 10px;
+        }
+        
+        ul.a {
+            list-style-type: circle;
+            margin-right: 20px;
+        }
+         
+        p {
+            margin-left: 10px;
+            margin-right: 10px;
+            margin-bottom: 0px;
+        }
+    </style>
+</head>
+<body>
+    <div id = "game_margin">
+        <div id = "game">
+            <iframe src="game.html" height="480"; width="480"; marginheight= "0"; marginwidth="0"; frameborder = 0;></iframe>
+        </div>
+    </div>
+    <div id="section_margin">
+        <div id = "section">
+            
+            <h1 class >Change Log (v0.1 alpha)</h1>
+            <ul class="a">
+                <li>Game Concept Created</li>
+                <li>Player, Drone, Food, and Resource objects added</li>
+                <li>Tilemap added</li>
+                <li>Map Generation Algorithm added to be used for procedural generation</li>
+                <li>Tilemap Collisions and Map collisions/overlaps added</li>
+                <li>Player HUD added</li>
+                <li>Drone AI Patrol Algorithm added</li>
+                <li>Stat decay over time added</li>
+                <li>Day/Night Cycle added</li>
+                <li>Event Generation Algorithm added</li>
+                <li>Temporary Menus added</li>
+            </ul>
+            
+            <h1>Future Features in Progress</h1>
+            <ul class="a">
+                <li>Resource-based crafting system to create med packs and ammo</li>
+                <li>Beneficial items that change player stats</li>
+                <li>Supply drop system</li>
+                <li>Player Inventory consisting of items equipped and consumables</li>
+                <li>Lose/Win State Splashscreens</li>
+                <li>Menu splashscreen</li>
+                <li>Pause/Exit Menu</li>
+                <li>Sound Effects and Background Music</li>
+            </ul>
+            
+            <h1>PROJECT DA5 PROTOTYPE</h1>
+            <p><strong>High Concept: </strong>Thrown into an unfamiliar and changing environment and given only a basic shelter, the player must survive the harsh environment by gathering resources while avoiding the death drones looking to kill you.</p>
+            <p><strong>Player Experience Goals: </strong>The goal of this game is to give the player a sense of openess despite being in a limited environment by using procedurally generated levels and events. By giving the player random items and the ability to choose which items to keep and discard, the player's play style will change depending on his or her choices.</p>
+            <p><strong>Genre:</strong> Survival Horror / RPG / Life Simulator</p>
+            <p><strong>Game play:</strong> The player will have to navigate the environment (using the WASD keys) to collect gather resources from the environment while avoiding the council’s death drones. The player will have to find and collect food that is randomly scattered around the world and collect water (by holding the SPACEBAR) from the rivers and lakes in the world or else his or her health will begin to deteriorate, leading to the end of the game. During certain intervals, a supply item will be dropped in the supply drop zone that will contain a random item that will cause either benefit or a combination of benefit and harm to the player if he or she chooses to use the item.</p>
+            <p><strong>Prototype Goal:</strong> Taking the skills aquired from the previous digital assignments, this assignment will focus mostly on algorithms used for procedurally generated levels, events, and item drops. The goal of this project is to create a game similar to what is seen on online game libraries.</p>
+            <p><strong>Features:</strong> This game will include numerous features that are built and improved from my other games which would include:</p>
+            <ul class="a">
+                <li>Procedurally generated levels through use of algorithms, meaning that the environment that you’re playing may be different from another person playing the game.</li>
+                <li>Randomly generated food spawning and drone spawning based on the procedurally generated environment</li>
+                <li>Health, Hunger, and Thirst System (as seen in games like Minecraft)  </li>
+                <li>Day/Night Cycle</li>
+                <li>RPG items that will improve player health, hunger, thirst stats or improve tools</li>
+                <li>Permanent Death</li>
+            </ul>
+            <p><strong>Setting/Premise:</strong> This game is set in a dystopian world in the year PB95, in which the current reigning empire is testing out a death coliseum to be used for entertainment. </p>
+            <p><strong>Story:</strong>  To fully test out the effectiveness of the death environment, the emperor declared that all adolescent squares from the size of 8 – 24 pixels will be chosen at random to participate in this death game. You, the player, are chosen to participate by fate, poor life choices, and by the fact that this game wouldn’t exist if you weren’t selected. There is a shred of hope, as your warden and best friend, Bob, promises to send food and supplies to you occasionally when the other guards or out on patrol.</p>
+            <p><strong>Target Audience:</strong>This game is targeted towards gamers who are a keen interesting rogue-like RPG games.</p>
+            <p><strong>Play time:</strong> This game is bounded by timers to keep track of the day/night cycles. Keeping that in mind, the total play time expected would be ~21 minutes.</p>
+            <p><strong>Strategies:</strong> Player strategy will change as the days increase due to the changing game rules. Thus, the player will have to orient themselves toward resources and lure drones away from resources when needed.</p>
+            <p><strong>Prototype Assets: </strong>All assets used currently in the game were created from scratch.</p>
+            <p><strong>Prototype Closest Other Game:</strong> Minecraft.</p>
+        </div>
+    </div>
+</body>
+</html>
