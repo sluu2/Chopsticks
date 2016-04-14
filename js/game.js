@@ -11,7 +11,7 @@ DA5Game.game.prototype = {
         
         if (this.game.infrared)
             this.initializeLight();
-        this.initializeDrones();    // INFRARED LENSES WILL ALLOW PLAYERS TO LOCATED DRONES IN THE DARK
+        this.initializeDrones();    // INFRARED LENSES WILL ALLOW PLAYERS TO LOCATE DRONES IN THE DARK
         if (!this.game.infrared)
             this.initializeLight();
         this.timerInitialization();
@@ -22,22 +22,10 @@ DA5Game.game.prototype = {
         this.physics.enable(this.win, Phaser.Physics.ARCADE);
         
         this.initializeHUD();
-        this.popMenu = false;
+        this.initializeMenus();
         this.camera.follow(this.game.player);
         
-        if (this.game.randomEvent1 == undefined) {
-            this.menu = this.add.sprite(240, 240, 'demoscreen');
-            this.menu.fixedToCamera = true;
-            this.menu.anchor.x = 0.5;
-            this.menu.anchor.y = 0.5;
-            this.game.paused = true;
-            this.pauseKey.onDown.add(function () {
-                if(this.game.paused) {
-                    this.menu.kill();
-                    this.game.paused = false;
-                }
-            }, this);
-        }
+        this.quarterCount = 0;
     },
     
     update: function(){
@@ -49,6 +37,9 @@ DA5Game.game.prototype = {
         this.physics.arcade.collide(this.drone, this.rock);
         this.physics.arcade.collide(this.drone, this.safe);
         this.physics.arcade.overlap(this.drone, this.game.player, this.damagePlayer, null, this);
+        this.physics.arcade.collide(this.pulse, this.safe, this.destroyPulse, null, this);
+        this.physics.arcade.collide(this.pulse, this.rock, this.destroyPulse, null, this);
+        this.physics.arcade.overlap(this.pulse, this.drone, this.stunDrone, null, this);
         this.physics.arcade.overlap(this.game.player, this.sand, this.sandCollide, null, this);
         this.physics.arcade.overlap(this.game.player, this.lake, this.lakeCollide, null, this);
         this.physics.arcade.overlap(this.game.player, this.river, this.riverCollide, null, this);
@@ -77,17 +68,28 @@ DA5Game.game.prototype = {
         else 
             this.game.player.body.velocity.y = 0;
         
-        this.menuKey.onDown.add(this.craftMenu, this)
+        this.healKey.onDown.add(this.healPlayer, this);
+        this.shieldKey.onDown.add(this.shieldPlayer, this);
         
-        //this.keyboard.isDown(Phaser.Keyboard.S)
-    
-        //LIGHT MOVEMENT FOR NIGHT SHIFT
-        this.game.space.x = this.game.player.x - 8;
-        this.game.space.y = this.game.player.y - 12;
-        this.light1.x = this.game.player.x - 632;
-        this.light1.y = this.game.player.y - 632;
-        this.light2.x = this.game.player.x - 632;
-        this.light2.y = this.game.player.y - 632;
+        /* SHOOTING */
+        this.cursors.up.onDown.add(this.fireUp, this);
+        this.cursors.down.onDown.add(this.fireDown, this);
+        this.cursors.left.onDown.add(this.fireLeft, this);
+        this.cursors.right.onDown.add(this.fireRight, this);
+        
+        this.craftKey.onDown.add(this.toggleCraftMenu, this);
+        this.inventoryKey.onDown.add(this.toggleInventory,this);
+        
+        this.confirmKey.onDown.add(this.confirmOption, this);
+        this.declineKey.onDown.add(this.declineOption, this);
+        
+        if (this.craftState === true){
+            this.oneKey.onDown.add(this.purchaseMedKit, this);
+            this.twoKey.onDown.add(this.purchaseShield, this);
+            this.threeKey.onDown.add(this.purchasePulseRounds, this);    
+        }
+        
+        this.movePlayerComponents();
         
         /* AI */
         this.droneTarget();
@@ -100,30 +102,394 @@ DA5Game.game.prototype = {
     },
     
     /* ---------------------- EXTERNAL HELPER FUNCTIONS BEGIN HERE AND ONWARDS ---------------------- */
-    craftMenu: function() {
-        /*
-        if (this.popMenu === false){
-            this.popMenu = true;
-            this.timeCycle.pause();
-            this.game.interact = true;
-            console.log(this.popMenu);
+    movePlayerComponents: function() {
+        //LIGHT MOVEMENT FOR NIGHT SHIFT
+        this.space.x = this.game.player.x - 8;
+        this.space.y = this.game.player.y - 12;
+        this.shield.x = this.game.player.x - 8;
+        this.shield.y = this.game.player.y - 8;
+        this.light1.x = this.game.player.x - 632;
+        this.light1.y = this.game.player.y - 632;
+        this.light2.x = this.game.player.x - 632;
+        this.light2.y = this.game.player.y - 632;
+    },
+    
+    confirmOption: function() {
+        if (this.exitGameState){
+            this.game.paused = false;
+            this.state.start('startMenu');
+        }
+    },
+    
+    declineOption: function() {
+        if (this.exitGameState){
+            this.exitMenu.visible = false;
+            this.exitGameState = false;
+            this.game.paused = false;
+        }
+        
+    },
+    
+    escapeSequence: function() {
+        if(this.game.paused) {
+            /* TEMPORARY CODE IN ASE OF GAME DIALOGUE OR INSTRUCTIONS */
+            if (this.game.day === 1 && this.game.dayState === 'day')
+                this.menu.kill();
+            /* TEMPORARY CODE IN ASE OF GAME DIALOGUE OR INSTRUCTIONS */
+            this.exitMenu.visible = false;
+            this.exitGameState = false;
+            this.game.paused = false;
+        }
+        else if (this.craftState) {
+            this.craftState = false;
+            this.game.interact = false;
+            this.resourceText.visible = false;
+            this.numLabel.visible = false;
+            this.craftMenu.visible = false;
         }
         else {
-            this.popMenu = false;
-            this.timeCycle.resume();
+            this.exitMenu.visible = true;
+            this.exitGameState = true;
+            this.game.paused = true;
+        }
+    },
+    
+    destroyPulse: function(pulse, rock) {
+        pulse.kill();
+    },
+    
+    stunDrone: function(pulse, drone){
+        if (drone === this.drone1) {
+            this.stunned1 = true;
+            this.drone1.body.velocity.x = 0;
+            this.drone1.body.velocity.y = 0;
+            this.drone1.animations.play('stunned');
+            this.stunTimer1 = this.time.create(true);
+            this.stunTimer1.add(this.game.stunDuration, this.destroyStunTimer, this, 1);
+            this.stunTimer1.start();
+        }
+        else if (drone === this.drone2) {
+            this.stunned2 = true;
+            this.drone2.body.velocity.x = 0;
+            this.drone2.body.velocity.y = 0;
+            this.drone2.animations.play('stunned');
+            this.stunTimer2 = this.time.create(true);
+            this.stunTimer2.add(this.game.stunDuration, this.destroyStunTimer, this, 2);
+            this.stunTimer2.start();
+        }
+        else if (drone === this.drone3) {
+            this.stunned3 = true;
+            this.drone3.body.velocity.x = 0;
+            this.drone3.body.velocity.y = 0;
+            this.drone3.animations.play('stunned');
+            this.stunTimer3 = this.time.create(true);
+            this.stunTimer3.add(this.game.stunDuration, this.destroyStunTimer, this, 3);
+            this.stunTimer3.start();
+        }
+        else if (drone === this.drone4) {
+            this.stunned4 = true;
+            this.drone4.body.velocity.x = 0;
+            this.drone4.body.velocity.y = 0;
+            this.drone4.animations.play('stunned');
+            this.stunTimer4 = this.time.create(true);
+            this.stunTimer4.add(this.game.stunDuration, this.destroyStunTimer, this, 4);
+            this.stunTimer4.start();
+        }
+        else if (drone === this.drone5) {
+            this.stunned5 = true;
+            this.drone5.body.velocity.x = 0;
+            this.drone5.body.velocity.y = 0;
+            this.drone5.animations.play('stunned');
+            this.stunTimer5 = this.time.create(true);
+            this.stunTimer5.add(this.game.stunDuration, this.destroyStunTimer, this, 5);
+            this.stunTimer5.start();
+        }
+        else if (drone === this.drone6) {
+            this.stunned6 = true;
+            this.drone6.body.velocity.x = 0;
+            this.drone6.body.velocity.y = 0;
+            this.drone6.animations.play('stunned');
+            this.stunTimer6 = this.time.create(true);
+            this.stunTimer6.add(this.game.stunDuration, this.destroyStunTimer, this, 6);
+            this.stunTimer6.start();
+        }
+        else if (drone === this.drone7) {
+            this.stunned7 = true;
+            this.drone7.body.velocity.x = 0;
+            this.drone7.body.velocity.y = 0;
+            this.drone7.animations.play('stunned');
+            this.stunTimer7 = this.time.create(true);
+            this.stunTimer7.add(this.game.stunDuration, this.destroyStunTimer, this, 7);
+            this.stunTimer7.start();
+        }
+        else if (drone === this.drone8) {
+            this.stunned8 = true;
+            this.drone8.body.velocity.x = 0;
+            this.drone8.body.velocity.y = 0;
+            this.drone8.frame = 1;
+            this.stunTimer8 = this.time.create(true);
+            this.stunTimer8.add(this.game.stunDuration, this.destroyStunTimer, this, 8);
+            this.stunTimer8.start();
+        }
+        else if (drone === this.drone9) {
+            this.stunned9 = true;
+            this.drone9.body.velocity.x = 0;
+            this.drone9.body.velocity.y = 0;
+            this.drone9.animations.play('stunned');
+            this.stunTimer9 = this.time.create(true);
+            this.stunTimer9.add(this.game.stunDuration, this.destroyStunTimer, this, 9);
+            this.stunTimer9.start();
+        }
+        else if (drone === this.drone10) {
+            this.stunned10 = true;
+            this.drone10.body.velocity.x = 0;
+            this.drone10.body.velocity.y = 0;
+            this.drone10.animations.play('stunned');
+            this.stunTimer10 = this.time.create(true);
+            this.stunTimer10.add(this.game.stunDuration, this.destroyStunTimer, this, 10);
+            this.stunTimer10.start();
+        }
+        else if (drone === this.drone11) {
+            this.stunned11 = true;
+            this.drone11.body.velocity.x = 0;
+            this.drone11.body.velocity.y = 0;
+            this.drone11.animations.play('stunned');
+            this.stunTimer11 = this.time.create(true);
+            this.stunTimer11.add(this.game.stunDuration, this.destroyStunTimer, this, 11);
+            this.stunTimer11.start();
+        }
+        else if (drone === this.drone12) {
+            this.stunned12 = true;
+            this.drone12.body.velocity.x = 0;
+            this.drone12.body.velocity.y = 0;
+            this.drone12.animations.play('stunned');
+            this.stunTimer12 = this.time.create(true);
+            this.stunTimer12.add(this.game.stunDuration, this.destroyStunTimer, this, 12);
+            this.stunTimer12.start();
+        }
+        else if (drone === this.drone13) {
+            this.stunned13 = true;
+            this.drone13.body.velocity.x = 0;
+            this.drone13.body.velocity.y = 0;
+            this.drone13.animations.play('stunned');
+            this.stunTimer13 = this.time.create(true);
+            this.stunTimer13.add(this.game.stunDuration, this.destroyStunTimer, this, 13);
+            this.stunTimer13.start();
+        }
+        else if (drone === this.drone14) {
+            this.stunned14 = true;
+            this.drone14.body.velocity.x = 0;
+            this.drone14.body.velocity.y = 0;
+            this.drone14.animations.play('stunned');
+            this.stunTimer14 = this.time.create(true);
+            this.stunTimer14.add(this.game.stunDuration, this.destroyStunTimer, this, 14);
+            this.stunTimer14.start();
+        }
+        else if (drone === this.drone15) {
+            this.stunned15 = true;
+            this.drone15.body.velocity.x = 0;
+            this.drone15.body.velocity.y = 0;
+            this.drone15.animations.play('stunned');
+            this.stunTimer15 = this.time.create(true);
+            this.stunTimer15.add(this.game.stunDuration, this.destroyStunTimer, this, 15);
+            this.stunTimer15.start();
+        }
+    },
+    
+    destroyStunTimer: function(droneNumber){
+        switch (droneNumber) {
+            case 1:
+                this.stunned1 = false;
+                this.drone1.animations.stop();
+                this.drone1.frame = 0;
+                break;
+            case 2:
+                this.stunned2 = false;
+                this.drone2.animations.stop();
+                this.drone2.frame = 0;
+                break;
+            case 3:
+                this.stunned3 = false;
+                this.drone3.animations.stop();
+                this.drone3.frame = 0;
+                break;
+            case 4:
+                this.stunned4 = false;
+                this.drone4.animations.stop();
+                this.drone4.frame = 0;
+                break;
+            case 5:
+                this.stunned5 = false;
+                this.drone5.animations.stop();
+                this.drone5.frame = 0;
+                break;
+            case 6:
+                this.stunned6 = false;
+                this.drone6.animations.stop();
+                this.drone6.frame = 0;
+                break;
+            case 7:
+                this.stunned7 = false;
+                this.drone7.animations.stop();
+                this.drone7.frame = 0;
+                break;
+            case 8:
+                this.stunned8 = false;
+                this.drone8.animations.stop();
+                this.drone8.frame = 0;
+                break;
+            case 9:
+                this.stunned9 = false;
+                this.drone9.animations.stop();
+                this.drone9.frame = 0;
+                break;
+            case 10:
+                this.stunned10 = false;
+                this.drone10.animations.stop();
+                this.drone10.frame = 0;
+                break;
+            case 11:
+                this.stunned11 = false;
+                this.drone11.animations.stop();
+                this.drone11.frame = 0;
+                break;
+            case 12:
+                this.stunned12 = false;
+                this.drone12.animations.stop();
+                this.drone12.frame = 0;
+                break;
+            case 13:
+                this.stunned13 = false;
+                this.drone13.animations.stop();
+                this.drone13.frame = 0;
+                break;
+            case 14:
+                this.stunned14 = false;
+                this.drone14.animations.stop();
+                this.drone14.frame = 0;
+                break;
+            case 15:
+                this.stunned15 = false;
+                this.drone15.animations.stop();
+                this.drone15.frame = 0;
+                break;
+            default:
+                break;
+        }
+    },
+    
+    healPlayer: function() {
+        if (this.game.medKit > 0) {
+            this.game.medKit -= 1;
+            this.updateInventory();
+            while (this.game.playerHealth < this.game.playerMaxHealth)
+                this.updateHealth(false);
+        }
+    },
+    
+    shieldPlayer: function() {
+        if (this.game.shieldCount > 0 && !this.game.hasShield) {
+            this.game.shieldCount -= 1;
+            this.updateInventory();
+            this.game.hasShield = true;
+            this.shield.visible = true;
+        }
+    },
+    
+    fireUp: function() {
+        if (this.game.pulseRounds > 0 && !this.craftState){
+            this.game.pulseRounds--;
+            this.updateInventory();
+            this.pulseRound = this.pulse.create(this.game.player.x + 2, this.game.player.y + 2, 'pulse');
+            this.pulseRound.body.velocity.y = -this.game.pulseSpeed;
+        }
+    },
+    
+    fireDown: function() {
+        if (this.game.pulseRounds > 0 && !this.craftState){
+            this.game.pulseRounds--;
+            this.updateInventory();
+            this.pulseRound = this.pulse.create(this.game.player.x + 2, this.game.player.y + 2, 'pulse');
+            this.pulseRound.body.velocity.y = this.game.pulseSpeed;
+        }
+    },
+    
+    fireLeft: function() {
+        if (this.game.pulseRounds > 0 && !this.craftState){
+            this.game.pulseRounds--;
+            this.updateInventory();
+            this.pulseRound = this.pulse.create(this.game.player.x + 2, this.game.player.y + 2, 'pulse');
+            this.pulseRound.body.velocity.x = -this.game.pulseSpeed;
+        }
+    },
+    
+    fireRight: function() {
+        if (this.game.pulseRounds > 0 && !this.craftState){
+            this.game.pulseRounds--;
+            this.updateInventory();
+            this.pulseRound = this.pulse.create(this.game.player.x  + 2, this.game.player.y + 2, 'pulse');
+            this.pulseRound.body.velocity.x = this.game.pulseSpeed;
+        }
+    },
+    
+    purchaseMedKit: function(){
+        if (this.game.resourceCount >= 10 && this.game.medKit < 3) {
+            this.game.resourceCount -= 10;
+            this.updateResourceText();
+            this.game.medKit++;
+            this.updateInventory();
+            this.craftMenu.frame = 1;
+        }
+        else
+            this.craftMenu.frame = 2;
+    },
+    
+    purchaseShield: function(){
+        if (this.game.resourceCount >= 3 && this.game.shieldCount < 3){
+            this.game.resourceCount -= 3;
+            this.updateResourceText();
+            this.game.shieldCount++;
+            this.updateInventory();
+            this.craftMenu.frame = 3;
+        }
+        else
+            this.craftMenu.frame = 4;
+    },
+    
+    purchasePulseRounds: function(){
+        if (this.game.resourceCount >= 5 && this.game.pulseRounds < 5){
+                this.game.resourceCount -= 5;
+                this.updateResourceText();
+                this.game.pulseRounds = 5;
+                this.updateInventory();
+                this.craftMenu.frame = 5;
+        }
+        else
+            this.craftMenu.frame = 6;
+    },
+    
+    toggleCraftMenu: function() {
+        if (this.craftState === false){
+            this.craftState = true;
+            this.game.interact = true;
+            this.craftMenu.frame = 0;
+            this.resourceText.visible = true;
+            this.craftMenu.visible = true;
+        }
+        else {
+            this.craftState = false;
             this.game.interact = false;
-            console.log(this.popMenu);
-        }*/
-        if (this.game.playerHealth < this.game.playerMaxHealth)
-            this.updateHealth(false);
+            this.resourceText.visible = false;
+            this.craftMenu.visible = false;
+        }
     },
     
     postLogicCheck: function() {
         /* POST LOGIC CHECKS */
         if (!this.spaceKey.isDown) {
-            if (this.popMenu !== true)
+            if (this.craftState !== true)
                 this.game.interact = false;
-            if (this.damageImmune.running || this.game.losingHealth)
+            if (!this.game.hasShield && (this.damageImmune.running || this.game.losingHealth))
                 this.game.player.animations.play('damaged');
             else
                 this.game.player.animations.play('normal');
@@ -138,8 +504,8 @@ DA5Game.game.prototype = {
         // slows player down when player is on sand or in water
         if (!this.physics.arcade.overlap(this.game.player, this.sand) && !this.physics.arcade.overlap(this.game.player, this.lake) && !this.physics.arcade.overlap(this.game.player, this.river)){
             this.game.isSlowed = false;
-            this.game.space.visible = false;
-            this.game.space.animations.stop();
+            this.space.visible = false;
+            this.space.animations.stop();
         }
         
         // health drain occurs when either the player's thirst or hunger is at 0
@@ -165,7 +531,6 @@ DA5Game.game.prototype = {
             }
         }
         
-        
         // end condition
         if (this.game.playerHealth === 0)
             this.GameOver();
@@ -189,6 +554,43 @@ DA5Game.game.prototype = {
             else
                 this.state.start('winState');
         }
+    },
+    
+    quarterDay: function() {
+        if (this.timedial.frame != 4 || this.timedial.frame != 8){
+            this.timedial.frame++;
+            this.quarterCount++;
+            this.quarterCycle = this.time.create(true);
+            this.quarterCycle.add((this.game.dayCycle / 4), this.quarterDay, this);
+            this.quarterCycle.start();
+        }
+        
+        if (this.quarterCount === 2)
+            this.spawnSupplyItem();
+        else if (this.quarterCount === 4)
+            this.supplyItem.kill();
+    },
+    
+    spawnSupplyItem: function() {
+        //this.spawnID = this.rnd.integerInRange(0, 12);
+        this.spawnID = 2;
+        switch (this.spawnID){
+            case 0:
+            case 1:
+            case 2:
+                this.supplyItem = this.add.sprite((18 * this.game.posMult), (1 * this.game.posMult), 'medkit');
+                break;
+            case 3:
+                break;
+            case 4:
+                break;
+            case 5:
+                break;
+            default:
+                break;
+        }
+        //
+        console.log('hello');
     },
     
     calculateEvent: function() {
@@ -249,9 +651,9 @@ DA5Game.game.prototype = {
     
     lakeCollide: function() {
         this.game.isSlowed = true;
-        if (this.spaceKey.isDown){
-            this.game.space.visible = false;
-            this.game.space.animations.stop();
+        if (this.spaceKey.isDown && !this.craftState){
+            this.space.visible = false;
+            this.space.animations.stop();
             this.game.player.animations.play('lakeRecover');
             this.game.interact = true;
             if (this.thirstDrain.running)
@@ -263,8 +665,8 @@ DA5Game.game.prototype = {
             }
         }
         else {
-            this.game.space.visible = true;
-            this.game.space.animations.play('press');
+            this.space.visible = true;
+            this.space.animations.play('press');
         }
     },
     
@@ -274,7 +676,7 @@ DA5Game.game.prototype = {
     
     riverCollide: function() {
         this.game.isSlowed = true;
-        if (this.spaceKey.isDown){
+        if (this.spaceKey.isDown && !this.craftState){
             this.game.interact = true;
             if (this.thirstDrain.running)
                 this.thirstDrain.destroy();
@@ -283,13 +685,13 @@ DA5Game.game.prototype = {
                 this.thirstGain.add(this.game.thirstRestoreR, this.updateThirst, this, false);
                 this.thirstGain.start();
             }
-            this.game.space.visible = false;
-            this.game.space.animations.stop();
+            this.space.visible = false;
+            this.space.animations.stop();
             this.game.player.animations.play('riverRecover');
         }
         else {
-            this.game.space.visible = true;
-            this.game.space.animations.play('press');
+            this.space.visible = true;
+            this.space.animations.play('press');
         }
     },
     
@@ -316,16 +718,14 @@ DA5Game.game.prototype = {
         }
     },
     
-    
-    
     initializeLight: function() {
         this.light1 = this.add.sprite((-17 * this.game.posMult) - 16, (-3 * this.game.posMult) + 16, 'light1');
         this.physics.enable(this.light1, Phaser.Physics.PHASER);
-        this.light1.alpha = .97;
+        this.light1.alpha = .95;
         
         this.light2 = this.add.sprite((-17 * this.game.posMult) - 16, (-3 * this.game.posMult) + 16, 'light2');
         this.physics.enable(this.light2, Phaser.Physics.PHASER);
-        this.light2.alpha = .97;
+        this.light2.alpha = .95;
         if (this.game.dayState === 'night') {
             switch(this.game.light) {
                 case 1:
@@ -346,197 +746,28 @@ DA5Game.game.prototype = {
     
     damagePlayer: function() {
         if (!this.damageImmune.running){
-            this.updateHealth(true);
+            if (this.game.hasShield)
+                this.shield.animations.play('shieldDown');
+            else
+                this.updateHealth(true);
             this.damageImmune = this.time.create(true);
             this.damageImmune.add(this.game.damageImmuneTime, this.destroyImmuneTimer, this);
             this.damageImmune.start();
         }
+        
     },
     
     destroyImmuneTimer: function() {
-        this.damageImmune.destroy();  
+        this.damageImmune.destroy();
+        if (this.game.hasShield){
+            this.game.hasShield = false;
+            this.shield.animations.stop();
+            this.shield.visible = false;
+        }
         this.game.player.animations.play('normal');
     },
     
-    initializeHUD: function() {
-        this.heart = this.add.sprite((0 * this.game.posMult) + 8, (14 * this.game.posMult) + 8, 'heart');
-        this.heart.fixedToCamera = true;
-        this.foodIco = this.add.sprite((4 * this.game.posMult) + 8, (14 * this.game.posMult) + 8, 'foodIco');
-        this.foodIco.fixedToCamera = true;
-        this.drop = this.add.sprite((8 * this.game.posMult) + 8, (14 * this.game.posMult) + 8, 'drop');
-        this.drop.fixedToCamera = true;
-        this.setHealth();
-        this.setHunger();
-        this.setThirst();
-        
-        this.darken = this.add.sprite(0, 0, 'darken');
-        this.darken.fixedToCamera = true;
-        this.darken.alpha = 0;
-        
-        switch (this.game.day){
-            case 1:
-                this.numLabel = this.add.sprite(4, 0, 'day1');
-                break;
-            case 2:
-                this.numLabel = this.add.sprite(4, 0, 'day2');
-                break;
-            case 3:
-                this.numLabel = this.add.sprite(4, 0, 'day3');
-                break;
-            case 4:
-                this.numLabel = this.add.sprite(4, 0, 'day4');
-                break;
-            case 5:
-                this.numLabel = this.add.sprite(4, 0, 'day5');
-                break;
-            case 6:
-                this.numLabel = this.add.sprite(4, 0, 'day6');
-                break;
-            case 7:
-                this.numLabel = this.add.sprite(4, 0, 'day7');
-                break;
-            default:
-                break;
-        }
-        
-        if (this.game.day < 5) {
-            if (this.game.randomEvent1 !== undefined) {
-                switch(this.game.randomEvent1){
-                    case 1:
-                        this.randomEventLabel = this.add.sprite(240, 240, 'abundance');
-                        break;
-                    case 2:
-                        this.randomEventLabel = this.add.sprite(240, 240, 'famine');
-                        break;
-                    case 3:
-                        this.randomEventLabel = this.add.sprite(240, 240, 'surplus');
-                        break;
-                    case 4:
-                        this.randomEventLabel = this.add.sprite(240, 240, 'scarcity');
-                        break;
-                    case 5:
-                        this.randomEventLabel = this.add.sprite(240, 240, 'quench');
-                        break;
-                    case 6:
-                        this.randomEventLabel = this.add.sprite(240, 240, 'dehydrate');
-                        break;
-                    case 7:
-                        this.randomEventLabel = this.add.sprite(240, 240, 'satiation');
-                        break;
-                    case 8:
-                        this.randomEventLabel = this.add.sprite(240, 240, 'starvation');
-                        break;
-                    case 9:
-                        this.randomEventLabel = this.add.sprite(240, 240, 'lowalert');
-                        break;
-                    case 10:
-                        this.randomEventLabel = this.add.sprite(240, 240, 'highalert');
-                        break;
-                    case 11:
-                        this.randomEventLabel = this.add.sprite(240, 240, 'agility');
-                        break;
-                    default:
-                        break;
-                }
-                console.log('randomEvent number: ' + this.game.randomEvent1);
-                if (this.game.randomEvent1 !== 0 && this.game.randomEvent1 !== 12) {
-                    this.randomEventLabel.anchor.x = 0.5;
-                    this.randomEventLabel.anchor.y = 0.5;
-                    this.randomEventLabel.fixedToCamera = true;
-                }
-            }
-        }
-        else {
-            if (this.game.randomEvent1 !== undefined) {
-                switch(this.game.randomEvent1) {
-                    case 1:
-                        this.randomEventLabel = this.add.sprite(240, 175, 'abundance');
-                        break;
-                    case 2:
-                        this.randomEventLabel = this.add.sprite(240, 175, 'famine');
-                        break;
-                    case 3:
-                        this.randomEventLabel = this.add.sprite(240, 175, 'surplus');
-                        break;
-                    case 4:
-                        this.randomEventLabel = this.add.sprite(240, 175, 'scarcity');
-                        break;
-                    case 5:
-                        this.randomEventLabel = this.add.sprite(240, 175, 'quench');
-                        break;
-                    case 6:
-                        this.randomEventLabel = this.add.sprite(240, 175, 'dehydrate');
-                        break;
-                    case 7:
-                        this.randomEventLabel = this.add.sprite(240, 175, 'satiation');
-                        break;
-                    case 8:
-                        this.randomEventLabel = this.add.sprite(240, 175, 'starvation');
-                        break;
-                    case 9:
-                        this.randomEventLabel = this.add.sprite(240, 175, 'lowalert');
-                        break;
-                    case 10:
-                        this.randomEventLabel = this.add.sprite(240, 175, 'highalert');
-                        break;
-                    case 11:
-                        this.randomEventLabel = this.add.sprite(240, 175, 'agility');
-                        break;
-                    default:
-                        break;
-                }
-                this.plus = this.add.sprite(240, 240, 'plus');
-                this.plus.anchor.x = 0.5;
-                this.plus.anchor.y = 0.5;
-                this.plus.fixedToCamera = true;
-
-                switch(this.game.randomEvent2) {
-                    case 1:
-                        this.randomEventLabel2 = this.add.sprite(240, 305, 'abundance');
-                        break;
-                    case 2:
-                        this.randomEventLabel2 = this.add.sprite(240, 305, 'famine');
-                        break;
-                    case 3:
-                        this.randomEventLabel2 = this.add.sprite(240, 305, 'surplus');
-                        break;
-                    case 4:
-                        this.randomEventLabel2 = this.add.sprite(240, 305, 'scarcity');
-                        break;
-                    case 5:
-                        this.randomEventLabel2 = this.add.sprite(240, 305, 'quench');
-                        break;
-                    case 6:
-                        this.randomEventLabel2 = this.add.sprite(240, 305, 'dehydrate');
-                        break;
-                    case 7:
-                        this.randomEventLabel2 = this.add.sprite(240, 305, 'satiation');
-                        break;
-                    case 8:
-                        this.randomEventLabel2 = this.add.sprite(240, 305, 'starvation');
-                        break;
-                    case 9:
-                        this.randomEventLabel2 = this.add.sprite(240, 305, 'lowalert');
-                        break;
-                    case 10:
-                        this.randomEventLabel2 = this.add.sprite(240, 305, 'highalert');
-                        break;
-                    case 11:
-                        this.randomEventLabel2 = this.add.sprite(240, 305, 'agility');
-                        break;
-                    default:
-                        break;
-                }
-                this.randomEventLabel.anchor.x = 0.5;
-                this.randomEventLabel.anchor.y = 0.5;
-                this.randomEventLabel.fixedToCamera = true;
-                this.randomEventLabel2.anchor.x = 0.5;
-                this.randomEventLabel2.anchor.y = 0.5;
-                this.randomEventLabel2.fixedToCamera = true;
-            }
-        }
-        this.numLabel.fixedToCamera = true;
-    },
+    
     
     collectFood: function(player, food) {
         this.food.remove(food);
@@ -548,6 +779,15 @@ DA5Game.game.prototype = {
     collectResource: function(player, resource) {
         this.resource.remove(resource);
         this.game.resourceCount++;
+        this.updateResourceText();
+        if (this.game.resourceCount < 10)
+            this.resourceText = this.add.text((3 * this.game.posMult) - 13, (10 * this.game.posMult) + 20, '  ' + this.game.resourceCount, { font: '16px Arial', fill: '#FFF'});
+        else if (this.game.resourceCount < 100)
+            this.resourceText = this.add.text((3 * this.game.posMult) - 13, (10 * this.game.posMult) + 20, ' ' + this.game.resourceCount, { font: '16px Arial', fill: '#FFF'});
+        else
+            this.resourceText = this.add.text((3 * this.game.posMult) - 13, (10 * this.game.posMult) + 20, '' + this.game.resourceCount, { font: '16px Arial', fill: '#FFF'});
+        this.resourceText.visible = false;
+        this.resourceText.fixedToCamera = true;
     },
     
     updateHealth: function(drain) {
@@ -755,6 +995,15 @@ DA5Game.game.prototype = {
         }
     },
     
+    updateResourceText: function() {
+        if (this.game.resourceCount < 10)
+            this.resourceText.text = '  ' + this.game.resourceCount;
+        else if (this.game.resourceCount < 100)
+            this.resourceText.text = ' ' + this.game.resourceCount;
+        else
+            this.resourceText.text = '' + this.game.resourceCount;
+    },
+    
     droneMoveCalc: function(subgroup) {
         /* 0 = stop; 1 = up; 2 = down; 3 = left; 4 = right */
         direction = this.rnd.integerInRange(0, 4);
@@ -798,95 +1047,95 @@ DA5Game.game.prototype = {
     droneTarget: function() {
         switch (this.game.maxDrones){
             case 15:
-                if (Math.abs(this.game.player.x - this.drone11.x) < 64 && Math.abs(this.game.player.y - this.drone11.y) < 64){
+                if (Math.abs(this.game.player.x - this.drone11.x) < 64 && Math.abs(this.game.player.y - this.drone11.y) < 64 && !this.stunned11){
                     this.follow11 = true;
                     this.physics.arcade.moveToObject(this.drone11, this.game.player, this.game.droneSpeed);
                 }
                 else
                     this.follow11 = false;
-                if (Math.abs(this.game.player.x - this.drone12.x) < 64 && Math.abs(this.game.player.y - this.drone12.y) < 64){
+                if (Math.abs(this.game.player.x - this.drone12.x) < 64 && Math.abs(this.game.player.y - this.drone12.y) < 64 && !this.stunned12){
                     this.follow12 = true;
                     this.physics.arcade.moveToObject(this.drone12, this.game.player, this.game.droneSpeed);
                 }
                 else
                     this.follow12 = false;
-                if (Math.abs(this.game.player.x - this.drone13.x) < 64 && Math.abs(this.game.player.y - this.drone13.y) < 64){
+                if (Math.abs(this.game.player.x - this.drone13.x) < 64 && Math.abs(this.game.player.y - this.drone13.y) < 64 && !this.stunned13){
                     this.follow13 = true;
                     this.physics.arcade.moveToObject(this.drone13, this.game.player, this.game.droneSpeed);
                 }
                 else
                     this.follow13 = false;
-                if (Math.abs(this.game.player.x - this.drone14.x) < 64 && Math.abs(this.game.player.y - this.drone14.y) < 64){
+                if (Math.abs(this.game.player.x - this.drone14.x) < 64 && Math.abs(this.game.player.y - this.drone14.y) < 64 && !this.stunned14){
                     this.follow14 = true;
                     this.physics.arcade.moveToObject(this.drone14, this.game.player, this.game.droneSpeed);
                 }
                 else
                     this.follow14 = false;
-                if (Math.abs(this.game.player.x - this.drone15.x) < 64 && Math.abs(this.game.player.y - this.drone15.y) < 64){
+                if (Math.abs(this.game.player.x - this.drone15.x) < 64 && Math.abs(this.game.player.y - this.drone15.y) < 64 && !this.stunned15){
                     this.follow15 = true;
                     this.physics.arcade.moveToObject(this.drone15, this.game.player, this.game.droneSpeed);
                 }
                 else
                     this.follow15 = false;
             case 10:
-                if (Math.abs(this.game.player.x - this.drone6.x) < 64 && Math.abs(this.game.player.y - this.drone6.y) < 64){
+                if (Math.abs(this.game.player.x - this.drone6.x) < 64 && Math.abs(this.game.player.y - this.drone6.y) < 64 && !this.stunned6){
                     this.follow6 = true;
                     this.physics.arcade.moveToObject(this.drone6, this.game.player, this.game.droneSpeed);
                 }
                 else
                     this.follow6 = false;
-                if (Math.abs(this.game.player.x - this.drone7.x) < 64 && Math.abs(this.game.player.y - this.drone7.y) < 64){
+                if (Math.abs(this.game.player.x - this.drone7.x) < 64 && Math.abs(this.game.player.y - this.drone7.y) < 64 && !this.stunned7){
                     this.follow7 = true;
                     this.physics.arcade.moveToObject(this.drone7, this.game.player, this.game.droneSpeed);
                 }
                 else
                     this.follow7 = false;
         
-                if (Math.abs(this.game.player.x - this.drone8.x) < 64 && Math.abs(this.game.player.y - this.drone8.y) < 64){
+                if (Math.abs(this.game.player.x - this.drone8.x) < 64 && Math.abs(this.game.player.y - this.drone8.y) < 64 && !this.stunned8){
                     this.follow8 = true;
                     this.physics.arcade.moveToObject(this.drone8, this.game.player, this.game.droneSpeed);
                 }
                 else
                     this.follow8 = false;
-                if (Math.abs(this.game.player.x - this.drone9.x) < 64 && Math.abs(this.game.player.y - this.drone9.y) < 64){
+                if (Math.abs(this.game.player.x - this.drone9.x) < 64 && Math.abs(this.game.player.y - this.drone9.y) < 64 && !this.stunned9){
                     this.follow9 = true;
                     this.physics.arcade.moveToObject(this.drone9, this.game.player, this.game.droneSpeed);
                 }
                 else
                     this.follow9 = false;
-                if (Math.abs(this.game.player.x - this.drone10.x) < 64 && Math.abs(this.game.player.y - this.drone10.y) < 64){
+                if (Math.abs(this.game.player.x - this.drone10.x) < 64 && Math.abs(this.game.player.y - this.drone10.y) < 64 && !this.stunned10){
                     this.follow10 = true;
                     this.physics.arcade.moveToObject(this.drone10, this.game.player, this.game.droneSpeed);
                 }
                 else
                     this.follow10 = false;
             case 5:
-                if (Math.abs(this.game.player.x - this.drone1.x) < 64 && Math.abs(this.game.player.y - this.drone1.y) < 64){
+                if (Math.abs(this.game.player.x - this.drone1.x) < 64 && Math.abs(this.game.player.y - this.drone1.y) < 64 && !this.stunned1){
                     this.follow1 = true;
                     this.physics.arcade.moveToObject(this.drone1, this.game.player, this.game.droneSpeed);
                 }
                 else
                     this.follow1 = false;
         
-                if (Math.abs(this.game.player.x - this.drone2.x) < 64 && Math.abs(this.game.player.y - this.drone2.y) < 64){
+                if (Math.abs(this.game.player.x - this.drone2.x) < 64 && Math.abs(this.game.player.y - this.drone2.y) < 64 && !this.stunned2){
                     this.follow2 = true;
                     this.physics.arcade.moveToObject(this.drone2, this.game.player, this.game.droneSpeed);
                 }
                 else
                     this.follow2 = false;
-                if (Math.abs(this.game.player.x - this.drone3.x) < 64 && Math.abs(this.game.player.y - this.drone3.y) < 64){
+                if (Math.abs(this.game.player.x - this.drone3.x) < 64 && Math.abs(this.game.player.y - this.drone3.y) < 64 && !this.stunned3){
                     this.follow3 = true;
                     this.physics.arcade.moveToObject(this.drone3, this.game.player, this.game.droneSpeed);
                 }
                 else
                     this.follow3 = false;    
-                if (Math.abs(this.game.player.x - this.drone4.x) < 64 && Math.abs(this.game.player.y - this.drone4.y) < 64){
+                if (Math.abs(this.game.player.x - this.drone4.x) < 64 && Math.abs(this.game.player.y - this.drone4.y) < 64 && !this.stunned4){
                     this.follow4 = true;
                     this.physics.arcade.moveToObject(this.drone4, this.game.player, this.game.droneSpeed);
                 }
                 else
                     this.follow4 = false;
-                if (Math.abs(this.game.player.x - this.drone5.x) < 64 && Math.abs(this.game.player.y - this.drone5.y) < 64){
+                if (Math.abs(this.game.player.x - this.drone5.x) < 64 && Math.abs(this.game.player.y - this.drone5.y) < 64 && !this.stunned5){
                     this.follow5 = true;
                     this.physics.arcade.moveToObject(this.drone5, this.game.player, this.game.droneSpeed);
                 }
@@ -904,71 +1153,71 @@ DA5Game.game.prototype = {
                 case 15:
                     switch (this.droneDir1) {
                         case 0:
-                            if (!this.follow11) {
+                            if (!this.follow11 && !this.stunned11) {
                                 this.drone11.body.velocity.x = 0;
                                 this.drone11.body.velocity.y = 0;
                             }
-                            if (!this.follow6) {
+                            if (!this.follow6 && !this.stunned6) {
                                 this.drone6.body.velocity.x = 0;
                                 this.drone6.body.velocity.y = 0;
                             }
-                            if (!this.follow1) {
+                            if (!this.follow1 && !this.stunned1) {
                                 this.drone1.body.velocity.x = 0;
                                 this.drone1.body.velocity.y = 0;
                             }
                             break;
                         case 1:
-                            if (!this.follow11) {
+                            if (!this.follow11 && !this.stunned11) {
                                 this.drone11.body.velocity.x = 0;
                                 this.drone11.body.velocity.y = -this.game.droneSpeed;
                             }
-                            if (!this.follow6) {
+                            if (!this.follow6 && !this.stunned6) {
                                 this.drone6.body.velocity.x = 0;
                                 this.drone6.body.velocity.y = -this.game.droneSpeed;
                             }
-                            if (!this.follow1) {
+                            if (!this.follow1 && !this.stunned1) {
                                 this.drone1.body.velocity.x = 0;
                                 this.drone1.body.velocity.y = -this.game.droneSpeed;
                             }
                             break;
                         case 2:
-                            if (!this.follow11) {
+                            if (!this.follow11 && !this.stunned11) {
                                 this.drone11.body.velocity.x = 0;
                                 this.drone11.body.velocity.y = this.game.droneSpeed;
                             }
-                            if (!this.follow6) {
+                            if (!this.follow6 && !this.stunned6) {
                                 this.drone6.body.velocity.x = 0;
                                 this.drone6.body.velocity.y = this.game.droneSpeed;
                             }
-                            if (!this.follow1) {
+                            if (!this.follow1 && !this.stunned1) {
                                 this.drone1.body.velocity.x = 0;
                                 this.drone1.body.velocity.y = this.game.droneSpeed;
                             }
                             break;
                         case 3:
-                            if (!this.follow11) {
+                            if (!this.follow11 && !this.stunned11) {
                                 this.drone11.body.velocity.x = -this.game.droneSpeed;
                                 this.drone11.body.velocity.y = 0;
                             }
-                            if (!this.follow6) {
+                            if (!this.follow6 && !this.stunned6) {
                                 this.drone6.body.velocity.x = -this.game.droneSpeed;
                                 this.drone6.body.velocity.y = 0;
                             }
-                            if (!this.follow1) {
+                            if (!this.follow1 && !this.stunned1) {
                                 this.drone1.body.velocity.x = -this.game.droneSpeed;
                                 this.drone1.body.velocity.y = 0;
                             }
                             break;
                         case 4:
-                            if (!this.follow11) {
+                            if (!this.follow11 && !this.stunned11) {
                                 this.drone11.body.velocity.x = this.game.droneSpeed;
                                 this.drone6.body.velocity.x = this.game.droneSpeed;
                             }
-                            if (!this.follow6) {
+                            if (!this.follow6 && !this.stunned6) {
                                 this.drone1.body.velocity.x = this.game.droneSpeed;
                                 this.drone11.body.velocity.y = 0;
                             }
-                            if (!this.follow1) {
+                            if (!this.follow1 && !this.stunned1) {
                                 this.drone6.body.velocity.y = 0;
                                 this.drone1.body.velocity.y = 0;
                             }
@@ -980,51 +1229,51 @@ DA5Game.game.prototype = {
                 case 10:
                     switch (this.droneDir1) {
                         case 0:
-                            if (!this.follow6) {
+                            if (!this.follow6 && !this.stunned6) {
                                 this.drone6.body.velocity.x = 0;
                                 this.drone6.body.velocity.y = 0;
                             }
-                            if (!this.follow1) {
+                            if (!this.follow1 && !this.stunned1) {
                                 this.drone1.body.velocity.x = 0;
                                 this.drone1.body.velocity.y = 0;
                             }
                             break;
                         case 1:
-                            if (!this.follow6) {
+                            if (!this.follow6 && !this.stunned6) {
                                 this.drone6.body.velocity.x = 0;
                                 this.drone6.body.velocity.y = -this.game.droneSpeed;
                             }
-                            if (!this.follow1) {
+                            if (!this.follow1 && !this.stunned1) {
                                 this.drone1.body.velocity.x = 0;
                                 this.drone1.body.velocity.y = -this.game.droneSpeed;
                             }
                             break;
                         case 2:
-                            if (!this.follow6) {
+                            if (!this.follow6 && !this.stunned6) {
                                 this.drone6.body.velocity.x = 0;
                                 this.drone6.body.velocity.y = this.game.droneSpeed;
                             }
-                            if (!this.follow1) {
+                            if (!this.follow1 && !this.stunned1) {
                                 this.drone1.body.velocity.x = 0;
                                 this.drone1.body.velocity.y = this.game.droneSpeed;
                             }
                             break;
                         case 3:
-                            if (!this.follow6) {
+                            if (!this.follow6 && !this.stunned6) {
                                 this.drone6.body.velocity.x = -this.game.droneSpeed;
                                 this.drone6.body.velocity.y = 0;
                             }
-                            if (!this.follow1) {
+                            if (!this.follow1 && !this.stunned1) {
                                 this.drone1.body.velocity.x = -this.game.droneSpeed;
                                 this.drone1.body.velocity.y = 0;
                             }
                             break;
                         case 4:
-                            if (!this.follow6) {
+                            if (!this.follow6 && !this.stunned6) {
                                 this.drone6.body.velocity.x = this.game.droneSpeed;
                                 this.drone6.body.velocity.y = 0;
                             }
-                            if (!this.follow1) {
+                            if (!this.follow1 && !this.stunned1) {
                                 this.drone1.body.velocity.x = this.game.droneSpeed;
                                 this.drone1.body.velocity.y = 0;
                             }
@@ -1036,31 +1285,31 @@ DA5Game.game.prototype = {
                 case 5:
                     switch (this.droneDir1) {
                         case 0:
-                            if (!this.follow1) {
+                            if (!this.follow1 && !this.stunned1) {
                                 this.drone1.body.velocity.x = 0;
                                 this.drone1.body.velocity.y = 0;
                             }
                             break;
                         case 1:
-                            if (!this.follow1) {
+                            if (!this.follow1 && !this.stunned1) {
                                 this.drone1.body.velocity.x = 0;
                                 this.drone1.body.velocity.y = -this.game.droneSpeed;
                             }
                             break;
                         case 2:
-                            if (!this.follow1) {
+                            if (!this.follow1 && !this.stunned1) {
                                 this.drone1.body.velocity.x = 0;
                                 this.drone1.body.velocity.y = this.game.droneSpeed;
                             }
                             break;
                         case 3:
-                            if (!this.follow1) {
+                            if (!this.follow1 && !this.stunned1) {
                                 this.drone1.body.velocity.x = -this.game.droneSpeed;
                                 this.drone1.body.velocity.y = 0;
                             }
                             break;
                         case 4:
-                            if (!this.follow1) {
+                            if (!this.follow1 && !this.stunned1) {
                                 this.drone1.body.velocity.x = this.game.droneSpeed;
                                 this.drone1.body.velocity.y = 0;
                             }
@@ -1079,71 +1328,71 @@ DA5Game.game.prototype = {
                 case 15:
                     switch (this.droneDir2) {
                         case 0:
-                            if (!this.follow12) {
+                            if (!this.follow12 && !this.stunned12) {
                                 this.drone12.body.velocity.x = 0;
                                 this.drone12.body.velocity.y = 0;
                             }
-                            if (!this.follow7) {
+                            if (!this.follow7 && !this.stunned7) {
                                 this.drone7.body.velocity.x = 0;
                                 this.drone7.body.velocity.y = 0;
                             }
-                            if (!this.follow2) {
+                            if (!this.follow2 && !this.stunned2) {
                                 this.drone2.body.velocity.x = 0;
                                 this.drone2.body.velocity.y = 0;
                             }
                             break;
                         case 1:
-                            if (!this.follow12) {
+                            if (!this.follow12 && !this.stunned12) {
                                 this.drone12.body.velocity.x = 0;
                                 this.drone12.body.velocity.y = -this.game.droneSpeed;
                             }
-                            if (!this.follow7) {
+                            if (!this.follow7 && !this.stunned7) {
                                 this.drone7.body.velocity.x = 0;
                                 this.drone7.body.velocity.y = -this.game.droneSpeed;
                             }
-                            if (!this.follow2) {
+                            if (!this.follow2 && !this.stunned2) {
                                 this.drone2.body.velocity.x = 0;
                                 this.drone2.body.velocity.y = -this.game.droneSpeed;
                             }
                             break;
                         case 2:
-                            if (!this.follow12) {
+                            if (!this.follow12 && !this.stunned12) {
                                 this.drone12.body.velocity.x = 0;
                                 this.drone12.body.velocity.y = this.game.droneSpeed;
                             }
-                            if (!this.follow7) {
+                            if (!this.follow7 && !this.stunned7) {
                                 this.drone7.body.velocity.x = 0;
                                 this.drone7.body.velocity.y = this.game.droneSpeed;
                             }
-                            if (!this.follow2) {
+                            if (!this.follow2 && !this.stunned2) {
                                 this.drone2.body.velocity.x = 0;
                                 this.drone2.body.velocity.y = this.game.droneSpeed;
                             }
                             break;
                         case 3:
-                            if (!this.follow12) {
+                            if (!this.follow12 && !this.stunned12) {
                                 this.drone12.body.velocity.x = -this.game.droneSpeed;
                                 this.drone12.body.velocity.y = 0;
                             }
-                            if (!this.follow7) {
+                            if (!this.follow7 && !this.stunned7) {
                                 this.drone7.body.velocity.x = -this.game.droneSpeed;
                                 this.drone7.body.velocity.y = 0;
                             }
-                            if (!this.follow2) {
+                            if (!this.follow2 && !this.stunned2) {
                                 this.drone2.body.velocity.x = -this.game.droneSpeed;
                                 this.drone2.body.velocity.y = 0;
                             }
                             break;
                         case 4:
-                            if (!this.follow12) {
+                            if (!this.follow12 && !this.stunned12) {
                                 this.drone12.body.velocity.x = this.game.droneSpeed;
                                 this.drone12.body.velocity.y = 0;
                             }
-                            if (!this.follow7) {
+                            if (!this.follow7 && !this.stunned7) {
                                 this.drone7.body.velocity.x = this.game.droneSpeed;
                                 this.drone7.body.velocity.y = 0;
                             }
-                            if (!this.follow2) {
+                            if (!this.follow2 && !this.stunned2) {
                                 this.drone2.body.velocity.x = this.game.droneSpeed;
                                 this.drone2.body.velocity.y = 0;
                             }
@@ -1155,31 +1404,31 @@ DA5Game.game.prototype = {
                 case 10:
                     switch (this.droneDir2) {
                         case 0:
-                            if (!this.follow7) {
+                            if (!this.follow7 && !this.stunned7) {
                                 this.drone7.body.velocity.x = 0;
                                 this.drone7.body.velocity.y = 0;
                             }
-                            if (!this.follow2) {
+                            if (!this.follow2 && !this.stunned2) {
                                 this.drone2.body.velocity.x = 0;
                                 this.drone2.body.velocity.y = 0;
                             }
                             break;
                         case 1:
-                            if (!this.follow7) {
+                            if (!this.follow7 && !this.stunned7) {
                                 this.drone7.body.velocity.x = 0;
                                 this.drone7.body.velocity.y = -this.game.droneSpeed;
                             }
-                            if (!this.follow2) {
+                            if (!this.follow2 && !this.stunned2) {
                                 this.drone2.body.velocity.x = 0;
                                 this.drone2.body.velocity.y = -this.game.droneSpeed;
                             }
                             break;
                         case 2:
-                            if (!this.follow7) {
+                            if (!this.follow7 && !this.stunned7) {
                                 this.drone7.body.velocity.x = 0;
                                 this.drone7.body.velocity.y = this.game.droneSpeed;
                             }
-                            if (!this.follow2) {
+                            if (!this.follow2 && !this.stunned2) {
                                 this.drone2.body.velocity.x = 0;
                                 this.drone2.body.velocity.y = this.game.droneSpeed;
                             }
@@ -1195,11 +1444,11 @@ DA5Game.game.prototype = {
                             }
                             break;
                         case 4:
-                            if (!this.follow7) {
+                            if (!this.follow7 && !this.stunned7) {
                                 this.drone7.body.velocity.x = this.game.droneSpeed;
                                 this.drone7.body.velocity.y = 0;
                             }
-                            if (!this.follow2) {
+                            if (!this.follow2 && !this.stunned2) {
                                 this.drone2.body.velocity.x = this.game.droneSpeed;
                                 this.drone2.body.velocity.y = 0;
                             }
@@ -1211,31 +1460,31 @@ DA5Game.game.prototype = {
                 case 5:
                     switch (this.droneDir2) {
                         case 0:
-                            if (!this.follow2) {
+                            if (!this.follow2 && !this.stunned2) {
                                 this.drone2.body.velocity.x = 0;
                                 this.drone2.body.velocity.y = 0;
                             }
                             break;
                         case 1:
-                            if (!this.follow2) {
+                            if (!this.follow2 && !this.stunned2) {
                                 this.drone2.body.velocity.x = 0;
                                 this.drone2.body.velocity.y = -this.game.droneSpeed;
                             }
                             break;
                         case 2:
-                            if (!this.follow2) {
+                            if (!this.follow2 && !this.stunned2) {
                                 this.drone2.body.velocity.x = 0;
                                 this.drone2.body.velocity.y = this.game.droneSpeed;
                             }
                             break;
                         case 3:
-                            if (!this.follow2) {
+                            if (!this.follow2 && !this.stunned2) {
                                 this.drone2.body.velocity.x = -this.game.droneSpeed;
                                 this.drone2.body.velocity.y = 0;
                             }
                             break;
                         case 4:
-                            if (!this.follow2) {
+                            if (!this.follow2 && !this.stunned2) {
                                 this.drone2.body.velocity.x = this.game.droneSpeed;
                                 this.drone2.body.velocity.y = 0;
                             }
@@ -1254,71 +1503,71 @@ DA5Game.game.prototype = {
                 case 15:
                     switch (this.droneDir3) {
                         case 0:
-                            if (!this.follow13) {
+                            if (!this.follow13 && !this.stunned13) {
                                 this.drone13.body.velocity.x = 0;
                                 this.drone13.body.velocity.y = 0;
                             }
-                            if (!this.follow8) {
+                            if (!this.follow8 && !this.stunned8) {
                                 this.drone8.body.velocity.x = 0;
                                 this.drone8.body.velocity.y = 0;
                             }
-                            if (!this.follow3) {
+                            if (!this.follow3 && !this.stunned3) {
                                 this.drone3.body.velocity.x = 0;
                                 this.drone3.body.velocity.y = 0;
                             }
                             break;
                         case 1:
-                            if (!this.follow13) {
+                            if (!this.follow13 && !this.stunned13) {
                                 this.drone13.body.velocity.x = 0;
                                 this.drone13.body.velocity.y = -this.game.droneSpeed;
                             }
-                            if (!this.follow8) {
+                            if (!this.follow8 && !this.stunned8) {
                                 this.drone8.body.velocity.x = 0;
                                 this.drone8.body.velocity.y = -this.game.droneSpeed;
                             }
-                            if (!this.follow3) {
+                            if (!this.follow3 && !this.stunned3) {
                                 this.drone3.body.velocity.x = 0;
                                 this.drone3.body.velocity.y = -this.game.droneSpeed;
                             }
                             break;
                         case 2:
-                            if (!this.follow13) {
+                            if (!this.follow13 && !this.stunned13) {
                                 this.drone13.body.velocity.x = 0;
                                 this.drone13.body.velocity.y = this.game.droneSpeed;
                             }
-                            if (!this.follow8) {
+                            if (!this.follow8 && !this.stunned8) {
                                 this.drone8.body.velocity.x = 0;
                                 this.drone8.body.velocity.y = this.game.droneSpeed;
                             }
-                            if (!this.follow3) {
+                            if (!this.follow3 && !this.stunned3) {
                                 this.drone3.body.velocity.x = 0;
                                 this.drone3.body.velocity.y = this.game.droneSpeed;
                             }
                             break;
                         case 3:
-                            if (!this.follow13) {
+                            if (!this.follow13 && !this.stunned13) {
                                 this.drone13.body.velocity.x = -this.game.droneSpeed;
                                 this.drone13.body.velocity.y = 0;
                             }
-                            if (!this.follow8) {
+                            if (!this.follow8 && !this.stunned8) {
                                 this.drone8.body.velocity.x = -this.game.droneSpeed;
                                 this.drone8.body.velocity.y = 0;
                             }
-                            if (!this.follow3) {
+                            if (!this.follow3 && !this.stunned3) {
                                 this.drone3.body.velocity.x = -this.game.droneSpeed;
                                 this.drone3.body.velocity.y = 0;
                             }
                             break;
                         case 4:
-                            if (!this.follow13) {
+                            if (!this.follow13 && !this.stunned13) {
                                 this.drone13.body.velocity.x = this.game.droneSpeed;
                                 this.drone13.body.velocity.y = 0;
                             }
-                            if (!this.follow8) {
+                            if (!this.follow8 && !this.stunned8) {
                                 this.drone8.body.velocity.x = this.game.droneSpeed;
                                 this.drone8.body.velocity.y = 0;
                             }
-                            if (!this.follow3) {
+                            if (!this.follow3 && !this.stunned3) {
                                 this.drone3.body.velocity.x = this.game.droneSpeed;
                                 this.drone3.body.velocity.y = 0;
                             }
@@ -1330,51 +1579,51 @@ DA5Game.game.prototype = {
                 case 10:
                     switch (this.droneDir3) {
                         case 0:
-                            if (!this.follow8) {
+                            if (!this.follow8 && !this.stunned8) {
                                 this.drone8.body.velocity.x = 0;
                                 this.drone8.body.velocity.y = 0;
                             }
-                            if (!this.follow3) {
+                            if (!this.follow3 && !this.stunned3) {
                                 this.drone3.body.velocity.x = 0;
                                 this.drone3.body.velocity.y = 0;
                             }
                             break;
                         case 1:
-                            if (!this.follow8) {
+                            if (!this.follow8 && !this.stunned8) {
                                 this.drone8.body.velocity.x = 0;
                                 this.drone8.body.velocity.y = -this.game.droneSpeed;
                             }
-                            if (!this.follow3) {
+                            if (!this.follow3 && !this.stunned3) {
                                 this.drone3.body.velocity.x = 0;
                                 this.drone3.body.velocity.y = -this.game.droneSpeed;
                             }
                             break;
                         case 2:
-                            if (!this.follow8) {
+                            if (!this.follow8 && !this.stunned8) {
                                 this.drone8.body.velocity.x = 0;
                                 this.drone8.body.velocity.y = this.game.droneSpeed;
                             }
-                            if (!this.follow3) {
+                            if (!this.follow3 && !this.stunned3) {
                                 this.drone3.body.velocity.x = 0;
                                 this.drone3.body.velocity.y = this.game.droneSpeed;
                             }
                             break;
                         case 3:
-                            if (!this.follow8) {
+                            if (!this.follow8 && !this.stunned8) {
                                 this.drone8.body.velocity.x = -this.game.droneSpeed;
                                 this.drone8.body.velocity.y = 0;
                             }
-                            if (!this.follow3) {
+                            if (!this.follow3 && !this.stunned3) {
                                 this.drone3.body.velocity.x = -this.game.droneSpeed;
                                 this.drone3.body.velocity.y = 0;
                             }
                             break;
                         case 4:
-                            if (!this.follow8) {
+                            if (!this.follow8 && !this.stunned8) {
                                 this.drone8.body.velocity.x = this.game.droneSpeed;
                                 this.drone8.body.velocity.y = 0;
                             }
-                            if (!this.follow3) {
+                            if (!this.follow3 && !this.stunned3) {
                                 this.drone3.body.velocity.x = this.game.droneSpeed;
                                 this.drone3.body.velocity.y = 0;
                             }
@@ -1386,31 +1635,31 @@ DA5Game.game.prototype = {
                 case 5:
                     switch (this.droneDir3) {
                         case 0:
-                            if (!this.follow3) {
+                            if (!this.follow3 && !this.stunned3) {
                                 this.drone3.body.velocity.x = 0;
                                 this.drone3.body.velocity.y = 0;
                             }
                             break;
                         case 1:
-                            if (!this.follow3) {
+                            if (!this.follow3 && !this.stunned3) {
                                 this.drone3.body.velocity.x = 0;
                                 this.drone3.body.velocity.y = -this.game.droneSpeed;
                             }
                             break;
                         case 2:
-                            if (!this.follow3) {
+                            if (!this.follow3 && !this.stunned3) {
                                 this.drone3.body.velocity.x = 0;
                                 this.drone3.body.velocity.y = this.game.droneSpeed;
                             }
                             break;
                         case 3:
-                            if (!this.follow3) {
+                            if (!this.follow3 && !this.stunned3) {
                                 this.drone3.body.velocity.x = -this.game.droneSpeed;
                                 this.drone3.body.velocity.y = 0;
                             }
                             break;
                         case 4:
-                            if (!this.follow3) {
+                            if (!this.follow3 && !this.stunned3) {
                                 this.drone3.body.velocity.x = this.game.droneSpeed;
                                 this.drone3.body.velocity.y = 0;
                             }
@@ -1429,71 +1678,71 @@ DA5Game.game.prototype = {
                 case 15:
                     switch (this.droneDir4) {
                         case 0:
-                            if (!this.follow14) {
+                            if (!this.follow14 && !this.stunned14) {
                                 this.drone14.body.velocity.x = 0;
                                 this.drone14.body.velocity.y = 0;
                             }
-                            if (!this.follow9) {
+                            if (!this.follow9 && !this.stunned9) {
                                 this.drone9.body.velocity.x = 0;
                                 this.drone9.body.velocity.y = 0;
                             }
-                            if (!this.follow4) {
+                            if (!this.follow4 && !this.stunned4) {
                                 this.drone4.body.velocity.x = 0;
                                 this.drone4.body.velocity.y = 0;
                             }
                             break;
                         case 1:
-                            if (!this.follow14) {
+                            if (!this.follow14 && !this.stunned14) {
                                 this.drone14.body.velocity.x = 0;
                                 this.drone14.body.velocity.y = -this.game.droneSpeed;
                             }
-                            if (!this.follow9) {
+                            if (!this.follow9 && !this.stunned9) {
                                 this.drone9.body.velocity.x = 0;
                                 this.drone9.body.velocity.y = -this.game.droneSpeed;
                             }
-                            if (!this.follow4) {
+                            if (!this.follow4 && !this.stunned4) {
                                 this.drone4.body.velocity.x = 0;
                                 this.drone4.body.velocity.y = -this.game.droneSpeed;
                             }
                             break;
                         case 2:
-                            if (!this.follow14) {
+                            if (!this.follow14 && !this.stunned14) {
                                 this.drone14.body.velocity.x = 0;
                                 this.drone14.body.velocity.y = this.game.droneSpeed;
                             }
-                            if (!this.follow9) {
+                            if (!this.follow9 && !this.stunned9) {
                                 this.drone9.body.velocity.x = 0;
                                 this.drone9.body.velocity.y = this.game.droneSpeed;
                             }
-                            if (!this.follow4) {
+                            if (!this.follow4 && !this.stunned4) {
                                 this.drone4.body.velocity.x = 0;
                                 this.drone4.body.velocity.y = this.game.droneSpeed;
                             }
                             break;
                         case 3:
-                            if (!this.follow14) {
+                            if (!this.follow14 && !this.stunned14) {
                                 this.drone14.body.velocity.x = -this.game.droneSpeed;
                                 this.drone14.body.velocity.y = 0;
                             }
-                            if (!this.follow9) {
+                            if (!this.follow9 && !this.stunned9) {
                                 this.drone9.body.velocity.x = -this.game.droneSpeed;
                                 this.drone9.body.velocity.y = 0;
                             }
-                            if (!this.follow4) {
+                            if (!this.follow4 && !this.stunned4) {
                                 this.drone4.body.velocity.x = -this.game.droneSpeed;
                                 this.drone4.body.velocity.y = 0;
                             }
                             break;
                         case 4:
-                            if (!this.follow14) {
+                            if (!this.follow14 && !this.stunned14) {
                                 this.drone14.body.velocity.x = this.game.droneSpeed;
                                 this.drone14.body.velocity.y = 0;
                             }
-                            if (!this.follow9) {
+                            if (!this.follow9 && !this.stunned9) {
                                 this.drone9.body.velocity.x = this.game.droneSpeed;
                                 this.drone9.body.velocity.y = 0;
                             }
-                            if (!this.follow4) {
+                            if (!this.follow4 && !this.stunned4) {
                                 this.drone4.body.velocity.x = this.game.droneSpeed;
                                 this.drone4.body.velocity.y = 0;
                             }
@@ -1505,51 +1754,51 @@ DA5Game.game.prototype = {
                 case 10:
                     switch (this.droneDir4) {
                         case 0:
-                            if (!this.follow9) {
+                            if (!this.follow9 && !this.stunned9) {
                                 this.drone9.body.velocity.x = 0;
                                 this.drone9.body.velocity.y = 0;
                             }
-                            if (!this.follow4) {
+                            if (!this.follow4 && !this.stunned4) {
                                 this.drone4.body.velocity.x = 0;
                                 this.drone4.body.velocity.y = 0;
                             }
                             break;
                         case 1:
-                            if (!this.follow9) {
+                            if (!this.follow9 && !this.stunned9) {
                                 this.drone9.body.velocity.x = 0;
                                 this.drone9.body.velocity.y = -this.game.droneSpeed;
                             }
-                            if (!this.follow4) {
+                            if (!this.follow4 && !this.stunned4) {
                                 this.drone4.body.velocity.x = 0;
                                 this.drone4.body.velocity.y = -this.game.droneSpeed;
                             }
                             break;
                         case 2:
-                            if (!this.follow9) {
+                            if (!this.follow9 && !this.stunned9) {
                                 this.drone9.body.velocity.x = 0;
                                 this.drone9.body.velocity.y = this.game.droneSpeed;
                             }
-                            if (!this.follow4) {
+                            if (!this.follow4 && !this.stunned4) {
                                 this.drone4.body.velocity.x = 0;
                                 this.drone4.body.velocity.y = this.game.droneSpeed;
                             }
                             break;
                         case 3:
-                            if (!this.follow9) {
+                            if (!this.follow9 && !this.stunned9) {
                                 this.drone9.body.velocity.x = -this.game.droneSpeed;
                                 this.drone9.body.velocity.y = 0;
                             }
-                            if (!this.follow4) {
+                            if (!this.follow4 && !this.stunned4) {
                                 this.drone4.body.velocity.x = -this.game.droneSpeed;
                                 this.drone4.body.velocity.y = 0;
                             }
                             break;
                         case 4:
-                            if (!this.follow9) {
+                            if (!this.follow9 && !this.stunned9) {
                                 this.drone9.body.velocity.x = this.game.droneSpeed;
                                 this.drone9.body.velocity.y = 0;
                             }
-                            if (!this.follow4) {
+                            if (!this.follow4 && !this.stunned4) {
                                 this.drone4.body.velocity.x = this.game.droneSpeed;
                                 this.drone4.body.velocity.y = 0;
                             }
@@ -1561,31 +1810,31 @@ DA5Game.game.prototype = {
                 case 5:
                     switch (this.droneDir4) {
                         case 0:
-                            if (!this.follow4) {
+                            if (!this.follow4 && !this.stunned4) {
                                 this.drone4.body.velocity.x = 0;
                                 this.drone4.body.velocity.y = 0;
                             }
                             break;
                         case 1:
-                            if (!this.follow4) {
+                            if (!this.follow4 && !this.stunned4) {
                                 this.drone4.body.velocity.x = 0;
                                 this.drone4.body.velocity.y = -this.game.droneSpeed;
                             }
                             break;
                         case 2:
-                            if (!this.follow4) {
+                            if (!this.follow4 && !this.stunned4) {
                                 this.drone4.body.velocity.x = 0;
                                 this.drone4.body.velocity.y = this.game.droneSpeed;
                             }
                             break;
                         case 3:
-                            if (!this.follow4) {
+                            if (!this.follow4 && !this.stunned4) {
                                 this.drone4.body.velocity.x = -this.game.droneSpeed;
                                 this.drone4.body.velocity.y = 0;
                             }
                             break;
                         case 4:
-                            if (!this.follow4) {
+                            if (!this.follow4 && !this.stunned4) {
                                 this.drone4.body.velocity.x = this.game.droneSpeed;
                                 this.drone4.body.velocity.y = 0;
                             }
@@ -1604,71 +1853,71 @@ DA5Game.game.prototype = {
                 case 15:
                     switch (this.droneDir5) {
                         case 0:
-                            if (!this.follow15) {
+                            if (!this.follow15 && !this.stunned15) {
                                 this.drone15.body.velocity.x = 0;
                                 this.drone15.body.velocity.y = 0;
                             }
-                            if (!this.follow10) {
+                            if (!this.follow10 && !this.stunned10) {
                                 this.drone10.body.velocity.x = 0;
                                 this.drone10.body.velocity.y = 0;
                             }
-                            if (!this.follow5) {
+                            if (!this.follow5 && !this.stunned5) {
                                 this.drone5.body.velocity.x = 0;
                                 this.drone5.body.velocity.y = 0;
                             }
                             break;
                         case 1:
-                            if (!this.follow15) {
+                            if (!this.follow15 && !this.stunned15) {
                                 this.drone15.body.velocity.x = 0;
                                 this.drone15.body.velocity.y = -this.game.droneSpeed;
                             }
-                            if (!this.follow10) {
+                            if (!this.follow10 && !this.stunned10) {
                                 this.drone10.body.velocity.x = 0;
                                 this.drone10.body.velocity.y = -this.game.droneSpeed;
                             }
-                            if (!this.follow5) {
+                            if (!this.follow5 && !this.stunned5) {
                                 this.drone5.body.velocity.x = 0;
                                 this.drone5.body.velocity.y = -this.game.droneSpeed;
                             }
                             break;
                         case 2:
-                            if (!this.follow15) {
+                            if (!this.follow15 && !this.stunned15) {
                                 this.drone15.body.velocity.x = 0;
                                 this.drone15.body.velocity.y = this.game.droneSpeed;
                             }
-                            if (!this.follow10) {
+                            if (!this.follow10 && !this.stunned10) {
                                 this.drone10.body.velocity.x = 0;
                                 this.drone10.body.velocity.y = this.game.droneSpeed;
                             }
-                            if (!this.follow5) {
+                            if (!this.follow5 && !this.stunned5) {
                                 this.drone5.body.velocity.x = 0;
                                 this.drone5.body.velocity.y = this.game.droneSpeed;
                             }
                             break;
                         case 3:
-                            if (!this.follow15) {
+                            if (!this.follow15 && !this.stunned15) {
                                 this.drone15.body.velocity.x = -this.game.droneSpeed;
                                 this.drone15.body.velocity.y = 0;
                             }
-                            if (!this.follow10) {
+                            if (!this.follow10 && !this.stunned10) {
                                 this.drone10.body.velocity.x = -this.game.droneSpeed;
                                 this.drone10.body.velocity.y = 0;
                             }
-                            if (!this.follow5) {
+                            if (!this.follow5 && !this.stunned5) {
                                 this.drone5.body.velocity.x = -this.game.droneSpeed;
                                 this.drone5.body.velocity.y = 0;
                             }
                             break;
                         case 4:
-                            if (!this.follow15) {
+                            if (!this.follow15 && !this.stunned15) {
                                 this.drone15.body.velocity.x = this.game.droneSpeed;
                                 this.drone15.body.velocity.y = 0;
                             }
-                            if (!this.follow10) {
+                            if (!this.follow10 && !this.stunned10) {
                                 this.drone10.body.velocity.x = this.game.droneSpeed;
                                 this.drone10.body.velocity.y = 0;
                             }
-                            if (!this.follow5) {
+                            if (!this.follow5 && !this.stunned5) {
                                 this.drone5.body.velocity.x = this.game.droneSpeed;
                                 this.drone5.body.velocity.y = 0;
                             }
@@ -1680,51 +1929,51 @@ DA5Game.game.prototype = {
                 case 10:
                     switch (this.droneDir5) {
                         case 0:
-                            if (!this.follow10) {
+                            if (!this.follow10 && !this.stunned10) {
                                 this.drone10.body.velocity.x = 0;
                                 this.drone10.body.velocity.y = 0;
                             }
-                            if (!this.follow5) {
+                            if (!this.follow5 && !this.stunned5) {
                                 this.drone5.body.velocity.x = 0;
                                 this.drone5.body.velocity.y = 0;
                             }
                             break;
                         case 1:
-                            if (!this.follow10) {
+                            if (!this.follow10 && !this.stunned10) {
                                 this.drone10.body.velocity.x = 0;
                                 this.drone10.body.velocity.y = -this.game.droneSpeed;
                             }
-                            if (!this.follow5) {
+                            if (!this.follow5 && !this.stunned5) {
                                 this.drone5.body.velocity.x = 0;
                                 this.drone5.body.velocity.y = -this.game.droneSpeed;
                             }
                             break;
                         case 2:
-                            if (!this.follow10) {
+                            if (!this.follow10 && !this.stunned10) {
                                 this.drone10.body.velocity.x = 0;
                                 this.drone10.body.velocity.y = this.game.droneSpeed;
                             }
-                            if (!this.follow5) {
+                            if (!this.follow5 && !this.stunned5) {
                                 this.drone5.body.velocity.x = 0;
                                 this.drone5.body.velocity.y = this.game.droneSpeed;
                             }
                             break;
                         case 3:
-                            if (!this.follow10) {
+                            if (!this.follow10 && !this.stunned10) {
                                 this.drone10.body.velocity.x = -this.game.droneSpeed;
                                 this.drone10.body.velocity.y = 0;
                             }
-                            if (!this.follow5) {
+                            if (!this.follow5 && !this.stunned5) {
                                 this.drone5.body.velocity.x = -this.game.droneSpeed;
                                 this.drone5.body.velocity.y = 0;
                             }
                             break;
                         case 4:
-                            if (!this.follow10) {
+                            if (!this.follow10 && !this.stunned10) {
                                 this.drone10.body.velocity.x = this.game.droneSpeed;
                                 this.drone10.body.velocity.y = 0;
                             }
-                            if (!this.follow5) {
+                            if (!this.follow5 && !this.stunned5) {
                                 this.drone5.body.velocity.x = this.game.droneSpeed;
                                 this.drone5.body.velocity.y = 0;
                             }
@@ -1736,31 +1985,31 @@ DA5Game.game.prototype = {
                 case 5:
                     switch (this.droneDir5) {    
                         case 0:
-                            if (!this.follow5) {
+                            if (!this.follow5 && !this.stunned5) {
                                 this.drone5.body.velocity.x = 0;
                                 this.drone5.body.velocity.y = 0;
                             }
                             break;
                         case 1:
-                            if (!this.follow5) {
+                            if (!this.follow5 && !this.stunned5) {
                                 this.drone5.body.velocity.x = 0;
                                 this.drone5.body.velocity.y = -this.game.droneSpeed;
                             }
                             break;
                         case 2:
-                            if (!this.follow5) {
+                            if (!this.follow5 && !this.stunned5) {
                                 this.drone5.body.velocity.x = 0;
                                 this.drone5.body.velocity.y = this.game.droneSpeed;
                             }
                             break;
                         case 3:
-                            if (!this.follow5) {
+                            if (!this.follow5 && !this.stunned5) {
                                 this.drone5.body.velocity.x = -this.game.droneSpeed;
                                 this.drone5.body.velocity.y = 0;
                             }
                             break;
                         case 4:
-                            if (!this.follow5) {
+                            if (!this.follow5 && !this.stunned5) {
                                 this.drone5.body.velocity.x = this.game.droneSpeed;
                                 this.drone5.body.velocity.y = 0;
                             }
@@ -1777,26 +2026,46 @@ DA5Game.game.prototype = {
     
     /* ---------------------- INITIALIZATION FUNCTIONS BEGIN AT THIS POINT ONWARD ---------------------- */
     playerInitialization: function() {
-        //this.keyboard = this.input.keyboard;
         this.upKey = this.input.keyboard.addKey(Phaser.Keyboard.W);
         this.leftKey = this.input.keyboard.addKey(Phaser.Keyboard.A);
         this.downKey = this.input.keyboard.addKey(Phaser.Keyboard.S);
         this.rightKey = this.input.keyboard.addKey(Phaser.Keyboard.D);
+        
         this.spaceKey = this.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR);
-        this.pauseKey = this.input.keyboard.addKey(Phaser.Keyboard.ESC);
-        this.menuKey = this.input.keyboard.addKey(Phaser.Keyboard.Q);
+        this.inventoryKey = this.input.keyboard.addKey(Phaser.Keyboard.I);
+        this.exitKey = this.input.keyboard.addKey(Phaser.Keyboard.ESC);
+        this.healKey = this.input.keyboard.addKey(Phaser.Keyboard.Q);
+        this.shieldKey = this.input.keyboard.addKey(Phaser.Keyboard.E);
+        this.confirmKey = this.input.keyboard.addKey(Phaser.Keyboard.Y);
+        this.declineKey = this.input.keyboard.addKey(Phaser.Keyboard.N);
+        
+        this.craftKey = this.input.keyboard.addKey(Phaser.Keyboard.C);
+        this.oneKey = this.input.keyboard.addKey(Phaser.Keyboard.ONE);
+        this.twoKey = this.input.keyboard.addKey(Phaser.Keyboard.TWO);
+        this.threeKey = this.input.keyboard.addKey(Phaser.Keyboard.THREE);
+        
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.pulse = this.add.group();
+        this.pulse.enableBody = true;
+        this.pulse.physicsBodyType = Phaser.Physics.ARCADE;
+        this.pulse.setAll('outOfBoundsKill', true);
+        this.pulse.setAll('checkWorldBounds', true);
         
         this.game.player = this.add.sprite((2 * this.game.posMult) + 8, (17 * this.game.posMult) + 8, 'player');
         this.physics.enable(this.game.player, Phaser.Physics.ARCADE);
         this.game.player.body.collideWorldBounds = true;
-        this.game.space = this.add.sprite(this.game.player.x - 8, this.game.player.y - 12, 'space');
-        this.physics.enable(this.game.space, Phaser.Physics.ARCADE);
+        this.shield = this.add.sprite(this.game.player.x - 8, this.game.player.y - 8, 'shield');
+        this.shield.visible = false;
+        this.space = this.add.sprite(this.game.player.x - 8, this.game.player.y - 12, 'space');
         
         this.game.player.animations.add('normal', [0], 0, true);
         this.game.player.animations.add('lakeRecover', [0, 1], 5, true);
         this.game.player.animations.add('riverRecover', [0, 1], 3, true);
         this.game.player.animations.add('damaged', [0, 2], 5, true);
-        this.game.space.animations.add('press', [0, 1, 1, 1, 1], 3, true);
+        this.space.animations.add('press', [0, 1, 1, 1, 1], 3, true);
+        this.shield.animations.add('shieldDown', [0, 1], 3, true);
+        
+        this.hasShield = false;
     },
     
     initializeFood: function() {
@@ -2004,9 +2273,11 @@ DA5Game.game.prototype = {
     },
     
     timerInitialization: function() {
-        /* TIMERS */
+        /* LIST OF TIMERS */
         this.timeCycle = this.time.create(true);
         this.timeCycle.add(this.game.dayCycle, this.endDay, this);
+        this.quarterCycle = this.time.create(true);
+        this.quarterCycle.add((this.game.dayCycle / 4), this.quarterDay, this);
         
         this.fadeLabelTimer = this.time.create(true);
         this.fadeLabelTimer.add(this.game.eventLabelTimer, this.fadeEventLabel, this);
@@ -2034,6 +2305,37 @@ DA5Game.game.prototype = {
         this.dronePatrol5 = this.time.create(true);
         this.dronePatrol5.add(this.game.moveTime5, this.droneMoveCalc, this, 5);
         
+        this.stunTimer1 = this.time.create(true);
+        this.stunTimer1.add(this.game.stunDuration, this.destroyStunTimer, this, 1);
+        this.stunTimer2 = this.time.create(true);
+        this.stunTimer2.add(this.game.stunDuration, this.destroyStunTimer, this, 2);
+        this.stunTimer3 = this.time.create(true);
+        this.stunTimer3.add(this.game.stunDuration, this.destroyStunTimer, this, 3);
+        this.stunTimer4 = this.time.create(true);
+        this.stunTimer4.add(this.game.stunDuration, this.destroyStunTimer, this, 4);
+        this.stunTimer5 = this.time.create(true);
+        this.stunTimer5.add(this.game.stunDuration, this.destroyStunTimer, this, 5);
+        this.stunTimer6 = this.time.create(true);
+        this.stunTimer6.add(this.game.stunDuration, this.destroyStunTimer, this, 6);
+        this.stunTimer7 = this.time.create(true);
+        this.stunTimer7.add(this.game.stunDuration, this.destroyStunTimer, this, 7);
+        this.stunTimer8 = this.time.create(true);
+        this.stunTimer8.add(this.game.stunDuration, this.destroyStunTimer, this, 8);
+        this.stunTimer9 = this.time.create(true);
+        this.stunTimer9.add(this.game.stunDuration, this.destroyStunTimer, this, 9);
+        this.stunTimer10 = this.time.create(true);
+        this.stunTimer10.add(this.game.stunDuration, this.destroyStunTimer, this, 10);
+        this.stunTimer11 = this.time.create(true);
+        this.stunTimer11.add(this.game.stunDuration, this.destroyStunTimer, this, 11);
+        this.stunTimer12 = this.time.create(true);
+        this.stunTimer12.add(this.game.stunDuration, this.destroyStunTimer, this, 12);
+        this.stunTimer13 = this.time.create(true);
+        this.stunTimer13.add(this.game.stunDuration, this.destroyStunTimer, this, 13);
+        this.stunTimer14 = this.time.create(true);
+        this.stunTimer14.add(this.game.stunDuration, this.destroyStunTimer, this, 14);
+        this.stunTimer15 = this.time.create(true);
+        this.stunTimer15.add(this.game.stunDuration, this.destroyStunTimer, this, 15);
+        
         this.hungerDrain.start();
         this.thirstDrain.start();
         this.dronePatrol1.start();
@@ -2042,6 +2344,7 @@ DA5Game.game.prototype = {
         this.dronePatrol4.start();
         this.dronePatrol5.start();
         this.timeCycle.start();
+        this.quarterCycle.start();
         this.fadeLabelTimer.start();
     },
     
@@ -2362,6 +2665,373 @@ DA5Game.game.prototype = {
             default:
                 break;
         }
+        
+        switch(this.game.maxDrones){
+            case 15:
+                this.drone11.animations.add('stunned', [1, 2], 3, true);
+                this.drone11.frame = 0;
+                this.drone12.animations.add('stunned', [1, 2], 3, true);
+                this.drone12.frame = 0;
+                this.drone13.animations.add('stunned', [1, 2], 3, true);
+                this.drone13.frame = 0;
+                this.drone14.animations.add('stunned', [1, 2], 3, true);
+                this.drone14.frame = 0;
+                this.drone15.animations.add('stunned', [1, 2], 3, true);
+                this.drone15.frame = 0;
+            case 10:
+                this.drone6.animations.add('stunned', [1, 2], 3, true);
+                this.drone6.frame = 0;
+                this.drone7.animations.add('stunned', [1, 2], 3, true);
+                this.drone7.frame = 0;
+                this.drone8.animations.add('stunned', [1, 2], 3, true);
+                this.drone8.frame = 0;
+                this.drone9.animations.add('stunned', [1, 2], 3, true);
+                this.drone9.frame = 0;
+                this.drone10.animations.add('stunned', [1, 2], 3, true);
+                this.drone10.frame = 0;
+            case 5:
+                this.drone1.animations.add('stunned', [1, 2], 3, true);
+                this.drone1.frame = 0;
+                this.drone2.animations.add('stunned', [1, 2], 3, true);
+                this.drone2.frame = 0;
+                this.drone3.animations.add('stunned', [1, 2], 3, true);
+                this.drone3.frame = 0;
+                this.drone4.animations.add('stunned', [1, 2], 3, true);
+                this.drone4.frame = 0;
+                this.drone5.animations.add('stunned', [1, 2], 3, true);
+                this.drone5.frame = 0;
+                break;
+            default:
+                break;
+        }
+    },
+    
+    updateInventory: function() {
+        switch (this.game.medKit){
+            case 0:
+                this.medKitInventory.frame = 0;
+                break;
+            case 1:
+                this.medKitInventory.frame = 1;
+                break;
+            case 2:
+                this.medKitInventory.frame = 2;
+                break;
+            case 3:
+                this.medKitInventory.frame = 3;
+                break;
+            default:
+                break;
+        } 
+        
+        switch (this.game.shieldCount){
+            case 0:
+                this.shieldInventory.frame = 0;
+                break;
+            case 1:
+                this.shieldInventory.frame = 1;
+                break;
+            case 2:
+                this.shieldInventory.frame = 2;
+                break;
+            case 3:
+                this.shieldInventory.frame = 3;
+                break;
+            default:
+                break;
+        } 
+        
+        switch (this.game.pulseRounds){
+            case 0:
+                this.pulseInventory.frame = 0;
+                break;
+            case 1:
+                this.pulseInventory.frame = 1;
+                break;
+            case 2:
+                this.pulseInventory.frame = 2;
+                break;
+            case 3:
+                this.pulseInventory.frame = 3;
+                break;
+            case 4:
+                this.pulseInventory.frame = 4;
+                break;
+            case 5:
+                this.pulseInventory.frame = 5;
+                break;
+            default:
+                break;
+        } 
+    },
+    
+    toggleInventory: function() {
+        if (this.inventoryState === false){
+            this.inventoryState = true;
+            this.inventoryIcon.visible = false;
+            this.consumablesCanvas.visible = true;
+            this.inventoryCanvas.visible = true;
+            this.medKitInventory.visible = true;
+            this.shieldInventory.visible = true;
+            this.pulseInventory.visible = true;
+            this.timedial.visible = true;
+            this.numLabel.visible = true;
+        }
+        else {
+            this.inventoryState = false;
+            this.inventoryIcon.visible = true;
+            this.consumablesCanvas.visible = false;
+            this.inventoryCanvas.visible = false;
+            this.medKitInventory.visible = false;
+            this.shieldInventory.visible = false;
+            this.pulseInventory.visible = false;
+            this.timedial.visible = false;
+            this.numLabel.visible = false;
+        }
+    },
+    
+    initializeHUD: function() {
+        this.heart = this.add.sprite((0 * this.game.posMult) + 8, (14 * this.game.posMult) + 8, 'heart');
+        this.heart.fixedToCamera = true;
+        this.foodIco = this.add.sprite((4 * this.game.posMult) + 8, (14 * this.game.posMult) + 8, 'foodIco');
+        this.foodIco.fixedToCamera = true;
+        this.drop = this.add.sprite((8 * this.game.posMult) + 8, (14 * this.game.posMult) + 8, 'drop');
+        this.drop.fixedToCamera = true;
+        this.setHealth();
+        this.setHunger();
+        this.setThirst();
+        
+        this.inventoryIcon = this.add.sprite(14 * this.game.posMult, 0 * this.game.posMult, 'inventoryKey');
+        this.consumablesCanvas = this.add.sprite((14 * this.game.posMult) - 4, (6 * this.game.posMult) - 4,'consumablesCanvas');
+        this.inventoryCanvas = this.add.sprite((12 * this.game.posMult) - 4, (14 * this.game.posMult) - 4, 'inventoryCanvas');
+        this.medKitInventory = this.add.sprite(14 * this.game.posMult, 6 * this.game.posMult, 'medico');
+        this.shieldInventory = this.add.sprite(14 * this.game.posMult, 7 * this.game.posMult, 'shieldico');
+        this.pulseInventory = this.add.sprite(14 * this.game.posMult, 8 * this.game.posMult, 'pulsico');
+        this.inventoryIcon.fixedToCamera = true;
+        this.consumablesCanvas.fixedToCamera = true;
+        this.inventoryCanvas.fixedToCamera = true;
+        this.medKitInventory.fixedToCamera = true;
+        this.shieldInventory.fixedToCamera = true;
+        this.pulseInventory.fixedToCamera = true;
+        this.consumablesCanvas.visible = false;
+        this.inventoryCanvas.visible = false;
+        this.medKitInventory.visible = false;
+        this.shieldInventory.visible = false;
+        this.pulseInventory.visible = false;
+        this.updateInventory();
+        
+        this.inventoryIcon.animations.add('toggle', [0, 1], 1, true);
+        this.inventoryIcon.animations.play('toggle');
+        
+        this.darken = this.add.sprite(0, 0, 'darken');
+        this.darken.fixedToCamera = true;
+        this.darken.alpha = 0;
+        
+        switch (this.game.day){
+            case 1:
+                this.numLabel = this.add.sprite(4, 0, 'day1');
+                break;
+            case 2:
+                this.numLabel = this.add.sprite(4, 0, 'day2');
+                break;
+            case 3:
+                this.numLabel = this.add.sprite(4, 0, 'day3');
+                break;
+            case 4:
+                this.numLabel = this.add.sprite(4, 0, 'day4');
+                break;
+            case 5:
+                this.numLabel = this.add.sprite(4, 0, 'day5');
+                break;
+            case 6:
+                this.numLabel = this.add.sprite(4, 0, 'day6');
+                break;
+            case 7:
+                this.numLabel = this.add.sprite(4, 0, 'day7');
+                break;
+            default:
+                break;
+        }
+        
+        this.timedial = this.add.sprite(0 * this.game.posMult, this.game.posMult, 'timedial');
+        this.timedial.fixedToCamera = true;
+        this.timedial.visible = false;
+        if (this.game.dayState === 'night')
+            this.timedial.frame = 5;
+        
+        if (this.game.day < 5) {
+            if (this.game.randomEvent1 !== undefined) {
+                switch(this.game.randomEvent1){
+                    case 1:
+                        this.randomEventLabel = this.add.sprite(240, 240, 'abundance');
+                        break;
+                    case 2:
+                        this.randomEventLabel = this.add.sprite(240, 240, 'famine');
+                        break;
+                    case 3:
+                        this.randomEventLabel = this.add.sprite(240, 240, 'surplus');
+                        break;
+                    case 4:
+                        this.randomEventLabel = this.add.sprite(240, 240, 'scarcity');
+                        break;
+                    case 5:
+                        this.randomEventLabel = this.add.sprite(240, 240, 'quench');
+                        break;
+                    case 6:
+                        this.randomEventLabel = this.add.sprite(240, 240, 'dehydrate');
+                        break;
+                    case 7:
+                        this.randomEventLabel = this.add.sprite(240, 240, 'satiation');
+                        break;
+                    case 8:
+                        this.randomEventLabel = this.add.sprite(240, 240, 'starvation');
+                        break;
+                    case 9:
+                        this.randomEventLabel = this.add.sprite(240, 240, 'lowalert');
+                        break;
+                    case 10:
+                        this.randomEventLabel = this.add.sprite(240, 240, 'highalert');
+                        break;
+                    case 11:
+                        this.randomEventLabel = this.add.sprite(240, 240, 'agility');
+                        break;
+                    default:
+                        break;
+                }
+                console.log('randomEvent number: ' + this.game.randomEvent1);
+                if (this.game.randomEvent1 !== 0 && this.game.randomEvent1 !== 12) {
+                    this.randomEventLabel.anchor.x = 0.5;
+                    this.randomEventLabel.anchor.y = 0.5;
+                    this.randomEventLabel.fixedToCamera = true;
+                }
+            }
+        }
+        else {
+            if (this.game.randomEvent1 !== undefined) {
+                switch(this.game.randomEvent1) {
+                    case 1:
+                        this.randomEventLabel = this.add.sprite(240, 175, 'abundance');
+                        break;
+                    case 2:
+                        this.randomEventLabel = this.add.sprite(240, 175, 'famine');
+                        break;
+                    case 3:
+                        this.randomEventLabel = this.add.sprite(240, 175, 'surplus');
+                        break;
+                    case 4:
+                        this.randomEventLabel = this.add.sprite(240, 175, 'scarcity');
+                        break;
+                    case 5:
+                        this.randomEventLabel = this.add.sprite(240, 175, 'quench');
+                        break;
+                    case 6:
+                        this.randomEventLabel = this.add.sprite(240, 175, 'dehydrate');
+                        break;
+                    case 7:
+                        this.randomEventLabel = this.add.sprite(240, 175, 'satiation');
+                        break;
+                    case 8:
+                        this.randomEventLabel = this.add.sprite(240, 175, 'starvation');
+                        break;
+                    case 9:
+                        this.randomEventLabel = this.add.sprite(240, 175, 'lowalert');
+                        break;
+                    case 10:
+                        this.randomEventLabel = this.add.sprite(240, 175, 'highalert');
+                        break;
+                    case 11:
+                        this.randomEventLabel = this.add.sprite(240, 175, 'agility');
+                        break;
+                    default:
+                        break;
+                }
+                this.plus = this.add.sprite(240, 240, 'plus');
+                this.plus.anchor.x = 0.5;
+                this.plus.anchor.y = 0.5;
+                this.plus.fixedToCamera = true;
+
+                switch(this.game.randomEvent2) {
+                    case 1:
+                        this.randomEventLabel2 = this.add.sprite(240, 305, 'abundance');
+                        break;
+                    case 2:
+                        this.randomEventLabel2 = this.add.sprite(240, 305, 'famine');
+                        break;
+                    case 3:
+                        this.randomEventLabel2 = this.add.sprite(240, 305, 'surplus');
+                        break;
+                    case 4:
+                        this.randomEventLabel2 = this.add.sprite(240, 305, 'scarcity');
+                        break;
+                    case 5:
+                        this.randomEventLabel2 = this.add.sprite(240, 305, 'quench');
+                        break;
+                    case 6:
+                        this.randomEventLabel2 = this.add.sprite(240, 305, 'dehydrate');
+                        break;
+                    case 7:
+                        this.randomEventLabel2 = this.add.sprite(240, 305, 'satiation');
+                        break;
+                    case 8:
+                        this.randomEventLabel2 = this.add.sprite(240, 305, 'starvation');
+                        break;
+                    case 9:
+                        this.randomEventLabel2 = this.add.sprite(240, 305, 'lowalert');
+                        break;
+                    case 10:
+                        this.randomEventLabel2 = this.add.sprite(240, 305, 'highalert');
+                        break;
+                    case 11:
+                        this.randomEventLabel2 = this.add.sprite(240, 305, 'agility');
+                        break;
+                    default:
+                        break;
+                }
+                this.randomEventLabel.anchor.x = 0.5;
+                this.randomEventLabel.anchor.y = 0.5;
+                this.randomEventLabel.fixedToCamera = true;
+                this.randomEventLabel2.anchor.x = 0.5;
+                this.randomEventLabel2.anchor.y = 0.5;
+                this.randomEventLabel2.fixedToCamera = true;
+            }
+        }
+        this.numLabel.fixedToCamera = true;
+    },
+    
+    initializeMenus: function() {
+        this.craftMenu = this.add.sprite(240, 240, 'craftMenu');
+        this.craftMenu.anchor.x = 0.5;
+        this.craftMenu.anchor.y = 0.5;
+        this.craftMenu.visible = false;
+        this.craftMenu.fixedToCamera = true;
+        
+        //this.updateResourceText();
+        if (this.game.resourceCount < 10)
+            this.resourceText = this.add.text((3 * this.game.posMult) - 13, (10 * this.game.posMult) + 20, '  ' + this.game.resourceCount, { font: '16px Arial', fill: '#FFF'});
+        else if (this.game.resourceCount < 100)
+            this.resourceText = this.add.text((3 * this.game.posMult) - 13, (10 * this.game.posMult) + 20, ' ' + this.game.resourceCount, { font: '16px Arial', fill: '#FFF'});
+        else
+            this.resourceText = this.add.text((3 * this.game.posMult) - 13, (10 * this.game.posMult) + 20, '' + this.game.resourceCount, { font: '16px Arial', fill: '#FFF'});
+        this.resourceText.visible = false;
+        this.resourceText.fixedToCamera = true;
+        
+        this.exitMenu = this.add.sprite(240, 240, 'exitMenu');
+        this.exitMenu.fixedToCamera = true;
+        this.exitMenu.anchor.x = 0.5;
+        this.exitMenu.anchor.y = 0.5;
+        this.exitMenu.visible = false;
+        
+        if (this.game.randomEvent1 == undefined) {
+            this.menu = this.add.sprite(240, 240, 'demoscreen');
+            this.menu.fixedToCamera = true;
+            this.menu.anchor.x = 0.5;
+            this.menu.anchor.y = 0.5;
+            this.game.paused = true;
+        }
+        this.exitKey.onDown.add(this.escapeSequence, this);
+        
+        this.craftState = false;
+        this.inventoryState = false;
     },
     
     /* ---------------------- MAP CREATION ALGORITHMS BEGIN AT THIS POINT ONWARD ---------------------- */

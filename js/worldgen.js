@@ -18,19 +18,29 @@ DA5Game.worldgen.prototype = {
         
         // Reset Player Statistics when new game has started
         if (this.game.playerHealth === 0 || this.game.playerHealth === undefined) {
+            // Player stats reset
             this.game.playerMaxHealth = 3;
             this.game.playerMaxHunger = 3;
             this.game.playerMaxThirst = 3;
             this.game.playerHealth = 3;
             this.game.playerHunger = 3;
             this.game.playerThirst = 3;
-            this.game.resourceCount = 0;
+            this.game.resourceCount = 500;
             
+            // Player items reset
+            this.game.slot1 = 0;
+            this.game.slot2 = 0;
+            this.game.medKit = 0;
+            this.game.pulseRounds = 0;
+            this.game.shieldCount = 0;
+            this.game.hasShield = false;
+            
+            // Day/Event variable reset
             this.game.light = 1;
-            this.game.infrared = false;
             this.game.day = 1;
             this.game.dayState = undefined;
             this.game.randomEvent1 = undefined;
+            this.game.infrared = true;
         }
         
         // Drone Patrol Subgroup Move Times
@@ -52,7 +62,9 @@ DA5Game.worldgen.prototype = {
         this.game.losingHealth = false;     // Is the player losing health albeit has no hunger or thirst?
         this.game.interact = false;         // Is the player pressing the interact key?
         this.game.isSlowed = false;         // Is the player on a slowing tile?
-        this.game.dayCycle = 90 * Phaser.Timer.SECOND;      // Time between each cycle
+        this.game.dayCycle = 16 * Phaser.Timer.SECOND;      // Time between each cycle
+        this.game.pulseSpeed = 250
+        this.game.stunDuration = 5 * Phaser.Timer.SECOND;
         
         if (this.game.dayState === undefined || this.game.dayState === 'night'){
             this.game.dayState = 'day';
@@ -116,7 +128,7 @@ DA5Game.worldgen.prototype = {
         else if (this.game.randomEvent1 === 10 || this.game.randomEvent2 === 10)        // HIGH ALERT
             this.game.maxDrones = 15;
         else
-            this.game.maxDrones = 10;
+            this.game.maxDrones = 5;
         
         
         if (this.game.randomEvent1 === 11 || this.game.randomEvent2 === 11)             // AGILITY
