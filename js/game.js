@@ -2,18 +2,21 @@ DA5Game.game = function(game) {};
 
 DA5Game.game.prototype = {
     create: function(){
+        this.initializeState = true;
         /* World Create */
         this.worldGen();
         this.setBoundary();
         
         this.initializeResources();
         this.initializeFood();
+        this.spawnSupplyItem();
         
-        if (this.game.infrared)
-            this.initializeLight();
+        this.initializeInfrared();
+        
+        this.initializeTurrets();
         this.initializeDrones();    // INFRARED LENSES WILL ALLOW PLAYERS TO LOCATE DRONES IN THE DARK
-        if (!this.game.infrared)
-            this.initializeLight();
+        
+        this.initializeLight();
         this.timerInitialization();
         this.playerInitialization();
         
@@ -22,7 +25,9 @@ DA5Game.game.prototype = {
         this.physics.enable(this.win, Phaser.Physics.ARCADE);
         
         this.initializeHUD();
+        this.initializeState = false;
         this.initializeMenus();
+        this.updateInventorySlots();
         this.camera.follow(this.game.player);
         
         this.quarterCount = 0;
@@ -32,6 +37,15 @@ DA5Game.game.prototype = {
         /* COLLISION LIST START */
         this.physics.arcade.collide(this.game.player, this.safe);
         this.physics.arcade.collide(this.game.player, this.rock);
+        this.physics.arcade.overlap(this.game.player, this.sand, this.sandCollide, null, this);
+        this.physics.arcade.overlap(this.game.player, this.lake, this.lakeCollide, null, this);
+        this.physics.arcade.overlap(this.game.player, this.river, this.riverCollide, null, this);
+        this.physics.arcade.overlap(this.game.player, this.win, this.GameOver, null, this);
+        this.physics.arcade.overlap(this.game.player, this.food, this.collectFood, null, this);
+        this.physics.arcade.overlap(this.game.player, this.resource, this.collectResource, null, this);
+        
+        this.physics.arcade.overlap(this.game.player, this.supplyItem, this.collectSupplyItem, null, this);
+        
         this.physics.arcade.collide(this.drone, this.drone);
         this.physics.arcade.collide(this.drone, this.boundary);
         this.physics.arcade.collide(this.drone, this.rock);
@@ -40,12 +54,6 @@ DA5Game.game.prototype = {
         this.physics.arcade.collide(this.pulse, this.safe, this.destroyPulse, null, this);
         this.physics.arcade.collide(this.pulse, this.rock, this.destroyPulse, null, this);
         this.physics.arcade.overlap(this.pulse, this.drone, this.stunDrone, null, this);
-        this.physics.arcade.overlap(this.game.player, this.sand, this.sandCollide, null, this);
-        this.physics.arcade.overlap(this.game.player, this.lake, this.lakeCollide, null, this);
-        this.physics.arcade.overlap(this.game.player, this.river, this.riverCollide, null, this);
-        this.physics.arcade.overlap(this.game.player, this.win, this.GameOver, null, this);
-        this.physics.arcade.overlap(this.game.player, this.food, this.collectFood, null, this);
-        this.physics.arcade.overlap(this.game.player, this.resource, this.collectResource, null, this);
         
         if (this.game.interact)
             this.game.speed = this.game.stop;
@@ -76,18 +84,13 @@ DA5Game.game.prototype = {
         this.cursors.down.onDown.add(this.fireDown, this);
         this.cursors.left.onDown.add(this.fireLeft, this);
         this.cursors.right.onDown.add(this.fireRight, this);
-        
         this.craftKey.onDown.add(this.toggleCraftMenu, this);
         this.inventoryKey.onDown.add(this.toggleInventory,this);
-        
         this.confirmKey.onDown.add(this.confirmOption, this);
         this.declineKey.onDown.add(this.declineOption, this);
-        
-        if (this.craftState === true){
-            this.oneKey.onDown.add(this.purchaseMedKit, this);
-            this.twoKey.onDown.add(this.purchaseShield, this);
-            this.threeKey.onDown.add(this.purchasePulseRounds, this);    
-        }
+        this.oneKey.onDown.add(this.option1, this);
+        this.twoKey.onDown.add(this.option2, this);
+        this.threeKey.onDown.add(this.option3, this);
         
         this.movePlayerComponents();
         
@@ -102,22 +105,295 @@ DA5Game.game.prototype = {
     },
     
     /* ---------------------- EXTERNAL HELPER FUNCTIONS BEGIN HERE AND ONWARDS ---------------------- */
+    
+    initializeTurrets: function() {
+        this.turret = this.add.group();
+        this.physics.enable(this.turret, Phaser.Physics.PHASER);
+        this.turret.enableBody = true;
+        
+        canSpawn = false;
+        while(!canSpawn){
+            canSpawn = true;
+            x = this.rnd.integerInRange(0, 19);
+            y = this.rnd.integerInRange(0, 19);
+            for (i = 0; i< this.game.spawnExclX.length; i++){
+                if (x === this.game.spawnExclX[i] && y === this.game.spawnExclY[i]) {
+                    canSpawn = false;
+                    break;
+                }
+            }
+            if (canSpawn){
+                this.turret1 = this.turret.create((x * this.game.posMult), (y * this.game.posMult), 'turret');
+                this.game.spawnExclX.push(x);
+                this.game.spawnExclY.push(y);
+            }
+        }
+        this.turret1.body.collideWorldBounds = true;
+        
+        this.enemyPulse = this.add.group();
+        this.enemyPulse.enableBody = true;
+        this.enemyPulse.physicsBodyType = Phaser.Physics.ARCADE;
+        this.enemyPulse.setAll('outOfBoundsKill', true);
+        this.enemyPulse.setAll('checkWorldBounds', true);
+    },
+    
+    collectSupplyItem: function() {
+        if (this.pickUp) {
+            this.supplyItem.kill();             // Destroys supply item
+            
+            if (this.spawnID >= 4) {
+                this.pauseTimers();
+                this.game.interact = true;          // Freezes player movement
+                this.supplyState = true;            // Changes control listener to listen for 'Y' and 'N'
+                this.supplyPrompt.visible = true;   // Makes the supply prompt visible
+            }
+            else {
+                // Consummable supply drops
+                switch (this.spawnID){
+                    case 1:
+                        if (this.game.medKit < 3) {
+                            this.game.medKit++;
+                            this.updateConsumables();
+                        }
+                        break;
+                    case 2:
+                        if (this.game.shieldCount < 3) {
+                            this.game.shieldCount++;
+                            this.updateConsumables();
+                        }
+                        break;
+                    case 3:
+                        this.game.resourceCount += 10;
+                        this.updateResourceText();
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+    },
+    
+    pauseTimers: function() {
+        this.timeCycle.pause();
+        this.quarterCycle.pause();
+        this.healthDrain.pause();
+        this.hungerDrain.pause();
+        this.thirstDrain.pause();
+    },
+    
+    resumeTimers: function() {
+        this.timeCycle.resume();
+        this.quarterCycle.resume();
+        this.healthDrain.resume();
+        this.hungerDrain.resume();
+        this.thirstDrain.resume();
+    },
+    
+    updateInventorySlots: function() {
+        //reset all stats first before applying the new buff
+        this.game.infrared = false;
+        this.game.light = 1;
+        this.game.playerMaxHealth = 3;
+        this.game.playerMaxHunger = 3;
+        this.game.playerMaxThirst = 3;
+        
+        switch (this.game.slot1){
+            /* case 1 - 3 are consummable drops and is handled in the collectSupplyItem function */
+            case 4:
+                this.game.infrared = true;
+                this.inventoryslot1 = this.add.sprite((13 * this.game.posMult), (14 * this.game.posMult), 'irgoggles');
+                this.inventoryslot1.fixedToCamera = true;
+                break;
+            case 5:
+                this.game.light = 2;
+                this.inventoryslot1 = this.add.sprite((13 * this.game.posMult), (14 * this.game.posMult), 'lamp');
+                this.inventoryslot1.fixedToCamera = true;
+                break;
+            case 6:
+                this.game.playerMaxHunger += 1;
+                this.inventoryslot1 = this.add.sprite((13 * this.game.posMult), (14 * this.game.posMult), 'picnicbasket');
+                this.inventoryslot1.fixedToCamera = true;
+                break;
+            case 7:
+                this.game.playerMaxHunger += 2;
+                this.inventoryslot1 = this.add.sprite((13 * this.game.posMult), (14 * this.game.posMult), 'refridgerator');
+                this.inventoryslot1.fixedToCamera = true;
+                break;
+            case 8:
+                this.game.playerMaxThirst += 1;
+                this.inventoryslot1 = this.add.sprite((13 * this.game.posMult), (14 * this.game.posMult), 'canteen');
+                this.inventoryslot1.fixedToCamera = true;
+                break;
+            case 9:
+                this.game.playerMaxThirst += 2;
+                this.inventoryslot1 = this.add.sprite((13 * this.game.posMult), (14 * this.game.posMult), 'waterjug');
+                this.inventoryslot1.fixedToCamera = true;
+                break;
+            case 10:
+                this.game.playerMaxHealth += 1;
+                this.inventoryslot1 = this.add.sprite((13 * this.game.posMult), (14 * this.game.posMult), 'mushroom');
+                this.inventoryslot1.fixedToCamera = true;
+                break;
+            case 11:
+                this.game.playerMaxHealth += 2;
+                this.inventoryslot1 = this.add.sprite((13 * this.game.posMult), (14 * this.game.posMult), 'diamondarmor');
+                this.inventoryslot1.fixedToCamera = true;
+                break;
+            default:
+                break;
+        }
+        
+        switch (this.game.slot2){
+            case 4:
+                this.game.infrared = true;
+                this.inventoryslot2 = this.add.sprite((14 * this.game.posMult), (14 * this.game.posMult), 'irgoggles');
+                this.inventoryslot2.fixedToCamera = true;
+                break;
+            case 5:
+                this.game.light = 2;
+                this.inventoryslot2 = this.add.sprite((14 * this.game.posMult), (14 * this.game.posMult), 'lamp');
+                this.inventoryslot2.fixedToCamera = true;
+                break;
+            case 6:
+                this.game.playerMaxHunger += 1;
+                this.inventoryslot2 = this.add.sprite((14 * this.game.posMult), (14 * this.game.posMult), 'picnicbasket');
+                this.inventoryslot2.fixedToCamera = true;
+                break;
+            case 7:
+                this.game.playerMaxHunger += 2;
+                this.inventoryslot2 = this.add.sprite((14 * this.game.posMult), (14 * this.game.posMult), 'refridgerator');
+                this.inventoryslot2.fixedToCamera = true;
+                break;
+            case 8:
+                this.game.playerMaxThirst += 1;
+                this.inventoryslot2 = this.add.sprite((14 * this.game.posMult), (14 * this.game.posMult), 'canteen');
+                this.inventoryslot2.fixedToCamera = true;
+                break;
+            case 9:
+                this.game.playerMaxThirst += 2;
+                this.inventoryslot2 = this.add.sprite((14 * this.game.posMult), (14 * this.game.posMult), 'waterjug');
+                this.inventoryslot2.fixedToCamera = true;
+                break;
+            case 10:
+                this.game.playerMaxHealth += 1;
+                this.inventoryslot2 = this.add.sprite((14 * this.game.posMult), (14 * this.game.posMult), 'mushroom');
+                this.inventoryslot2.fixedToCamera = true;
+                break;
+            case 11:
+                this.game.playerMaxHealth += 2;
+                this.inventoryslot2 = this.add.sprite((14 * this.game.posMult), (14 * this.game.posMult), 'diamondarmor');
+                this.inventoryslot2.fixedToCamera = true;
+                break;
+            default:
+                break;
+        }
+        
+        // Calculates PLAYER STATS
+        if (this.game.slot1 === 10 || this.game.slot1 === 11 || this.game.slot2 === 10 || this.game.slot2 === 11) {
+            if (this.game.playerMaxHealth > 5)
+                this.game.playerMaxHealth = 5;
+            while (this.game.playerHealth > this.game.playerMaxHealth)
+                this.healthDecay(true);
+            this.setHealth();
+        }
+        if (this.game.slot1 === 6 || this.game.slot1 === 7 || this.game.slot2 === 6 || this.game.slot2 === 7) {
+            if (this.game.playerMaxHunger > 5)
+                this.game.playerMaxHunger = 5;
+            while (this.game.playerHunger > this.playerMaxHunger)
+                this.hungerDecay(true);
+            this.setHunger();
+        }
+        if (this.game.slot1 === 8 || this.game.slot1 === 9 || this.game.slot2 === 8 || this.game.slot2 === 9) {
+            if (this.game.playerMaxThirst > 5)
+                this.game.playerMaxThirst = 5;
+            while (this.game.playerThirst > this.game.playerMaxThirst)
+                this.thirstDrain(true);
+            this.setThirst();
+        }
+        
+        // Calculates NIGHT field of vision
+        if (this.game.dayState === 'night'){
+            if (this.game.infrared){
+                this.light1.visible = false;
+                this.light2.visible = false;
+                switch(this.game.light){
+                    case 1:
+                        this.ir1.visible = true;
+                        this.ir2.visible = false;
+                        break;
+                    case 2:
+                        this.ir1.visible = false;
+                        this.ir2.visible = true;
+                        break;
+                    default:
+                        break;
+                }
+            }
+            else {
+                this.ir1.visible = false;
+                this.ir2.visible = false;
+                switch(this.game.light){
+                    case 1:
+                        this.light1.visible = true;
+                        this.light2.visible = false;
+                        break;
+                    case 2:
+                        this.light1.visible = false;
+                        this.light2.visible = true;
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+        
+        if (this.inventoryslot1 !== undefined){
+            if (this.inventoryState)
+                this.inventoryslot1.visible = true;
+            else
+                this.inventoryslot1.visible = false;
+        }
+        
+        if (this.inventoryslot2 !== undefined){
+            if (this.inventoryState)
+                this.inventoryslot2.visible = true;
+            else
+                this.inventoryslot2.visible = false;
+        }
+    },
+    
     movePlayerComponents: function() {
-        //LIGHT MOVEMENT FOR NIGHT SHIFT
-        this.space.x = this.game.player.x - 8;
-        this.space.y = this.game.player.y - 12;
-        this.shield.x = this.game.player.x - 8;
-        this.shield.y = this.game.player.y - 8;
-        this.light1.x = this.game.player.x - 632;
-        this.light1.y = this.game.player.y - 632;
-        this.light2.x = this.game.player.x - 632;
-        this.light2.y = this.game.player.y - 632;
+        /* IF STATEMENTS ARE USED HERE TO OPTIMIZE PERFORMANCE BY ONLY MOVING THE COMPONENTS THAT ARE RELEVANT */
+        if (this.physics.arcade.overlap(this.game.player, this.river) || this.physics.arcade.overlap(this.game.player, this.lake)) {
+            this.space.x = this.game.player.x - 8;
+            this.space.y = this.game.player.y - 12;
+        }
+        if (this.game.hasShield){
+            this.shield.x = this.game.player.x - 8;
+            this.shield.y = this.game.player.y - 8;
+        }
+        if (this.game.dayState == 'night') {
+            this.light1.x = this.game.player.x - 632;
+            this.light1.y = this.game.player.y - 632;
+            this.light2.x = this.game.player.x - 632;
+            this.light2.y = this.game.player.y - 632;
+            this.ir1.x = this.game.player.x - 632;
+            this.ir1.y = this.game.player.y - 632;
+            this.ir2.x = this.game.player.x - 632;
+            this.ir2.y = this.game.player.y - 632;
+        }
     },
     
     confirmOption: function() {
         if (this.exitGameState){
             this.game.paused = false;
             this.state.start('startMenu');
+        }
+        else if (this.supplyState){
+            this.supplyState = false;
+            this.supplyPrompt.visible = false;
+            this.slotState = true;
+            this.slotPrompt.visible = true;
         }
     },
     
@@ -127,18 +403,29 @@ DA5Game.game.prototype = {
             this.exitGameState = false;
             this.game.paused = false;
         }
+        else if (this.supplyState){
+            this.supplyState = false;
+            this.supplyPrompt.visible = false;
+            this.resumeTimers();
+        }
         
     },
     
     escapeSequence: function() {
         if(this.game.paused) {
-            /* TEMPORARY CODE IN ASE OF GAME DIALOGUE OR INSTRUCTIONS */
+            /* TEMPORARY CODE IN CASE OF GAME DIALOGUE OR INSTRUCTIONS */
             if (this.game.day === 1 && this.game.dayState === 'day')
                 this.menu.kill();
-            /* TEMPORARY CODE IN ASE OF GAME DIALOGUE OR INSTRUCTIONS */
+            /* TEMPORARY CODE IN CASE OF GAME DIALOGUE OR INSTRUCTIONS */
             this.exitMenu.visible = false;
             this.exitGameState = false;
             this.game.paused = false;
+        }
+        else if (this.slotState){
+            this.supplyState = true;
+            this.supplyPrompt.visible = true;
+            this.slotState = false;
+            this.slotPrompt.visible = false;
         }
         else if (this.craftState) {
             this.craftState = false;
@@ -381,7 +668,7 @@ DA5Game.game.prototype = {
     healPlayer: function() {
         if (this.game.medKit > 0) {
             this.game.medKit -= 1;
-            this.updateInventory();
+            this.updateConsumables();
             while (this.game.playerHealth < this.game.playerMaxHealth)
                 this.updateHealth(false);
         }
@@ -390,7 +677,7 @@ DA5Game.game.prototype = {
     shieldPlayer: function() {
         if (this.game.shieldCount > 0 && !this.game.hasShield) {
             this.game.shieldCount -= 1;
-            this.updateInventory();
+            this.updateConsumables();
             this.game.hasShield = true;
             this.shield.visible = true;
         }
@@ -399,7 +686,7 @@ DA5Game.game.prototype = {
     fireUp: function() {
         if (this.game.pulseRounds > 0 && !this.craftState){
             this.game.pulseRounds--;
-            this.updateInventory();
+            this.updateConsumables();
             this.pulseRound = this.pulse.create(this.game.player.x + 2, this.game.player.y + 2, 'pulse');
             this.pulseRound.body.velocity.y = -this.game.pulseSpeed;
         }
@@ -408,7 +695,7 @@ DA5Game.game.prototype = {
     fireDown: function() {
         if (this.game.pulseRounds > 0 && !this.craftState){
             this.game.pulseRounds--;
-            this.updateInventory();
+            this.updateConsumables();
             this.pulseRound = this.pulse.create(this.game.player.x + 2, this.game.player.y + 2, 'pulse');
             this.pulseRound.body.velocity.y = this.game.pulseSpeed;
         }
@@ -417,7 +704,7 @@ DA5Game.game.prototype = {
     fireLeft: function() {
         if (this.game.pulseRounds > 0 && !this.craftState){
             this.game.pulseRounds--;
-            this.updateInventory();
+            this.updateConsumables();
             this.pulseRound = this.pulse.create(this.game.player.x + 2, this.game.player.y + 2, 'pulse');
             this.pulseRound.body.velocity.x = -this.game.pulseSpeed;
         }
@@ -426,46 +713,79 @@ DA5Game.game.prototype = {
     fireRight: function() {
         if (this.game.pulseRounds > 0 && !this.craftState){
             this.game.pulseRounds--;
-            this.updateInventory();
+            this.updateConsumables();
             this.pulseRound = this.pulse.create(this.game.player.x  + 2, this.game.player.y + 2, 'pulse');
             this.pulseRound.body.velocity.x = this.game.pulseSpeed;
         }
     },
     
-    purchaseMedKit: function(){
-        if (this.game.resourceCount >= 10 && this.game.medKit < 3) {
-            this.game.resourceCount -= 10;
-            this.updateResourceText();
-            this.game.medKit++;
-            this.updateInventory();
-            this.craftMenu.frame = 1;
-        }
-        else
-            this.craftMenu.frame = 2;
+    fireEnemyPulse: function() {
+        //this.enemyPulseRound = this.enemyPulseRound();
     },
     
-    purchaseShield: function(){
-        if (this.game.resourceCount >= 3 && this.game.shieldCount < 3){
-            this.game.resourceCount -= 3;
-            this.updateResourceText();
-            this.game.shieldCount++;
-            this.updateInventory();
-            this.craftMenu.frame = 3;
+    option1: function(){
+        if (this.craftState) {
+            if (this.game.resourceCount >= 10 && this.game.medKit < 3) {
+                this.game.resourceCount -= 10;
+                this.updateResourceText();
+                this.game.medKit++;
+                this.updateConsumables();
+                this.craftMenu.frame = 1;
+            }
+            else
+                this.craftMenu.frame = 2;
         }
-        else
-            this.craftMenu.frame = 4;
+        else if (this.slotState){
+            this.slotPrompt.visible = false;
+            this.slotState = false;
+            this.game.slot1 = this.spawnID;
+            
+            if (this.inventoryslot1 !== undefined)
+                this.inventoryslot1.kill();
+            if (this.inventoryslot2 !== undefined)
+                this.inventoryslot2.kill();
+            this.updateInventorySlots();
+            this.resumeTimers();
+        }
     },
     
-    purchasePulseRounds: function(){
-        if (this.game.resourceCount >= 5 && this.game.pulseRounds < 5){
+    option2: function(){
+        if (this.craftState) {
+            if (this.game.resourceCount >= 3 && this.game.shieldCount < 3){
+                this.game.resourceCount -= 3;
+                this.updateResourceText();
+                this.game.shieldCount++;
+                this.updateConsumables();
+                this.craftMenu.frame = 3;
+            }
+            else
+                this.craftMenu.frame = 4;
+        }
+        else if (this.slotState){
+            this.slotPrompt.visible = false;
+            this.slotState = false;
+            this.game.slot2 = this.spawnID;
+            if (this.inventoryslot1 !== undefined)
+                this.inventoryslot1.kill();
+            if (this.inventoryslot2 !== undefined)
+                this.inventoryslot2.kill();
+            this.updateInventorySlots();
+            this.resumeTimers();
+        }
+    },
+    
+    option3: function(){
+        if (this.craftState) {
+            if (this.game.resourceCount >= 5 && this.game.pulseRounds < 5){
                 this.game.resourceCount -= 5;
                 this.updateResourceText();
                 this.game.pulseRounds = 5;
-                this.updateInventory();
+                this.updateConsumables();
                 this.craftMenu.frame = 5;
+            }
+            else
+                this.craftMenu.frame = 6;
         }
-        else
-            this.craftMenu.frame = 6;
     },
     
     toggleCraftMenu: function() {
@@ -487,7 +807,7 @@ DA5Game.game.prototype = {
     postLogicCheck: function() {
         /* POST LOGIC CHECKS */
         if (!this.spaceKey.isDown) {
-            if (this.craftState !== true)
+            if (this.craftState !== true && this.supplyState !== true)
                 this.game.interact = false;
             if (!this.game.hasShield && (this.damageImmune.running || this.game.losingHealth))
                 this.game.player.animations.play('damaged');
@@ -544,6 +864,10 @@ DA5Game.game.prototype = {
             this.nightTransition.start();
         }
         else {
+            //Reset Variables
+            this.inventoryState = false;
+            this.game.hasShield = false;
+            
             if (this.game.dayState === 'night')
                 this.game.day++;
             this.calculateEvent();
@@ -565,32 +889,73 @@ DA5Game.game.prototype = {
             this.quarterCycle.start();
         }
         
-        if (this.quarterCount === 2)
-            this.spawnSupplyItem();
-        else if (this.quarterCount === 4)
-            this.supplyItem.kill();
+        if (this.quarterCount === 2){
+            this.pickUp = true;
+            this.supplyItem.visible = true;
+        }
     },
     
     spawnSupplyItem: function() {
-        //this.spawnID = this.rnd.integerInRange(0, 12);
-        this.spawnID = 2;
+        this.spawnID = this.rnd.integerInRange(4, 11);
+        /*if (this.game.dayState !== 'night')
+            this.spawnID = 9;
+        else
+            this.spawnID = 8;
+        */
+        this.itemRarity = this.rnd.integerInRange(0, 5);/*
+        if (this.itemRarity === 0)
+            this.spawnID = this.rnd.integerInRange();
+        else
+            this.spawnID = this.rnd.integerInRange();*/
         switch (this.spawnID){
-            case 0:
+            // Allows Player to Locate Enemies at Night
+            // +1 Medkit Consumable
             case 1:
-            case 2:
                 this.supplyItem = this.add.sprite((18 * this.game.posMult), (1 * this.game.posMult), 'medkit');
                 break;
+            // +1 Shield Consumable
+            case 2:
+                this.supplyItem = this.add.sprite((18 * this.game.posMult), (1 * this.game.posMult), 'shielditem');
+                break;
+            // Gives Resources
             case 3:
+                this.supplyItem = this.add.sprite((18 * this.game.posMult), (1 * this.game.posMult), 'backpack');
                 break;
+                
             case 4:
+                this.supplyItem = this.add.sprite((18 * this.game.posMult), (1 * this.game.posMult), 'irgoggles');
                 break;
+            // Increase Night Vision Radius by 2 Blocks
             case 5:
+                this.supplyItem = this.add.sprite((18 * this.game.posMult), (1 * this.game.posMult), 'lamp');
+                break;
+            
+            // +1, +2 Max Food Upgrade Items
+            case 6:
+                this.supplyItem = this.add.sprite((18 * this.game.posMult), (1 * this.game.posMult), 'picnicbasket');
+                break;
+            case 7:
+                this.supplyItem = this.add.sprite((18 * this.game.posMult), (1 * this.game.posMult), 'refridgerator');
+                break;
+            // +1, +2 Max Thirst Upgrade Items
+            case 8:
+                this.supplyItem = this.add.sprite((18 * this.game.posMult), (1 * this.game.posMult), 'canteen');
+                break;
+            case 9:
+                this.supplyItem = this.add.sprite((18 * this.game.posMult), (1 * this.game.posMult), 'waterjug');
+                break;
+            // +1, +2 Health Upgrade Items
+            case 10:
+                this.supplyItem = this.add.sprite((18 * this.game.posMult), (1 * this.game.posMult), 'mushroom');
+                break;
+            case 11:
+                this.supplyItem = this.add.sprite((18 * this.game.posMult), (1 * this.game.posMult), 'diamondarmor');
                 break;
             default:
                 break;
         }
-        //
-        console.log('hello');
+        this.physics.enable(this.supplyItem, Phaser.Physics.PHASER);
+        this.supplyItem.visible = false;
     },
     
     calculateEvent: function() {
@@ -726,7 +1091,7 @@ DA5Game.game.prototype = {
         this.light2 = this.add.sprite((-17 * this.game.posMult) - 16, (-3 * this.game.posMult) + 16, 'light2');
         this.physics.enable(this.light2, Phaser.Physics.PHASER);
         this.light2.alpha = .95;
-        if (this.game.dayState === 'night') {
+        if (this.game.dayState === 'night' && !this.game.infrared) {
             switch(this.game.light) {
                 case 1:
                     this.light2.visible = false;
@@ -741,6 +1106,33 @@ DA5Game.game.prototype = {
         else {
             this.light1.visible = false;
             this.light2.visible = false;
+        }
+    },
+    
+    /* This method is the same as initializeLight, except that it will help control getting infrared goggles at night*/
+    initializeInfrared: function() {
+        this.ir1 = this.add.sprite((-17 * this.game.posMult) - 16, (-3 * this.game.posMult) + 16, 'light1');
+        this.physics.enable(this.ir1, Phaser.Physics.PHASER);
+        this.ir1.alpha = .95;
+        
+        this.ir2 = this.add.sprite((-17 * this.game.posMult) - 16, (-3 * this.game.posMult) + 16, 'light2');
+        this.physics.enable(this.ir2, Phaser.Physics.PHASER);
+        this.ir2.alpha = .95;
+        if (this.game.dayState === 'night' && this.game.infrared) {
+            switch(this.game.light) {
+                case 1:
+                    this.ir2.visible = false;
+                    break;
+                case 2:
+                    this.ir1.visible = false;
+                    break;
+                default:
+                    break;
+            }
+        }
+        else {
+            this.ir1.visible = false;
+            this.ir2.visible = false;
         }
     },
     
@@ -2044,7 +2436,10 @@ DA5Game.game.prototype = {
         this.twoKey = this.input.keyboard.addKey(Phaser.Keyboard.TWO);
         this.threeKey = this.input.keyboard.addKey(Phaser.Keyboard.THREE);
         
+        this.testKey = this.input.keyboard.addKey(Phaser.Keyboard.P);
+        
         this.cursors = this.input.keyboard.createCursorKeys();
+        
         this.pulse = this.add.group();
         this.pulse.enableBody = true;
         this.pulse.physicsBodyType = Phaser.Physics.ARCADE;
@@ -2117,20 +2512,22 @@ DA5Game.game.prototype = {
     },
     
     setHealth: function() {
-        this.health1 = this.add.sprite(1 * this.game.posMult, (14 * this.game.posMult) + 11, 'healthsq');
-        this.health1.fixedToCamera = true;
+        if (this.initializeState) {
+            this.health1 = this.add.sprite(1 * this.game.posMult, (14 * this.game.posMult) + 11, 'healthsq');
+            this.health1.fixedToCamera = true;
+            this.health2 = this.add.sprite(this.health1.x + 16, (14 * this.game.posMult) + 11, 'healthsq');
+            this.health2.fixedToCamera = true;
+            this.health3 = this.add.sprite(this.health2.x + 16, (14 * this.game.posMult) + 11, 'healthsq');
+            this.health3.fixedToCamera = true;
+            this.health4 = this.add.sprite(this.health3.x + 16, (14 * this.game.posMult) + 11, 'healthsq');
+            this.health4.fixedToCamera = true;
+            this.health5 = this.add.sprite(this.health4.x + 16, (14 * this.game.posMult) + 11, 'healthsq');
+            this.health5.fixedToCamera = true;
+        }
         this.health1.visible = false;
-        this.health2 = this.add.sprite(this.health1.x + 16, (14 * this.game.posMult) + 11, 'healthsq');
-        this.health2.fixedToCamera = true;
         this.health2.visible = false;
-        this.health3 = this.add.sprite(this.health2.x + 16, (14 * this.game.posMult) + 11, 'healthsq');
-        this.health3.fixedToCamera = true;
         this.health3.visible = false;
-        this.health4 = this.add.sprite(this.health3.x + 16, (14 * this.game.posMult) + 11, 'healthsq');
-        this.health4.fixedToCamera = true;
         this.health4.visible = false;
-        this.health5 = this.add.sprite(this.health4.x + 16, (14 * this.game.posMult) + 11, 'healthsq');
-        this.health5.fixedToCamera = true;
         this.health5.visible = false;
         switch(this.game.playerMaxHealth) {
             case 5:
@@ -2145,18 +2542,20 @@ DA5Game.game.prototype = {
                 this.health1.visible = true;
                 break;
         }
-        //WIP
+        
+        // If player's current health exceeds the player's max health due to inventory changes, set a cap
+        if (this.game.playerHealth > this.game.playerMaxHealth)
+            this.game.playerHealth = this.game.playerMaxHealth;
+        
         switch(this.game.playerHealth) {
             case 1:
                 this.health2.alpha = 0.2;
             case 2:
                 this.health3.alpha = 0.2;
             case 3:
-                if (this.game.playerMaxHealth > 3)
-                    this.health4.alpha = 0.2;
+                this.health4.alpha = 0.2;
             case 4:
-                if (this.game.playerMaxHealth > 4)
-                    this.health5.alpha = 0.2;
+                this.health5.alpha = 0.2;
                 break;
             default:
                 break;
@@ -2164,20 +2563,23 @@ DA5Game.game.prototype = {
     },
     
     setHunger: function() {
-        this.hunger1 = this.add.sprite(5 * this.game.posMult, (14 * this.game.posMult) + 11, 'hungersq');
-        this.hunger1.fixedToCamera = true;
+        if (this.initializeState) {
+            this.hunger1 = this.add.sprite(5 * this.game.posMult, (14 * this.game.posMult) + 11, 'hungersq');
+            this.hunger1.fixedToCamera = true;
+            this.hunger2 = this.add.sprite(this.hunger1.x + 16, (14 * this.game.posMult) + 11, 'hungersq');
+            this.hunger2.fixedToCamera = true;
+            this.hunger3 = this.add.sprite(this.hunger2.x + 16, (14 * this.game.posMult) + 11, 'hungersq');
+            this.hunger3.fixedToCamera = true;
+            this.hunger4 = this.add.sprite(this.hunger3.x + 16, (14 * this.game.posMult) + 11, 'hungersq');
+            this.hunger4.fixedToCamera = true;
+            this.hunger5 = this.add.sprite(this.hunger4.x + 16, (14 * this.game.posMult) + 11, 'hungersq');
+            this.hunger5.fixedToCamera = true;
+        }
+        
         this.hunger1.visible = false;
-        this.hunger2 = this.add.sprite(this.hunger1.x + 16, (14 * this.game.posMult) + 11, 'hungersq');
-        this.hunger2.fixedToCamera = true;
         this.hunger2.visible = false;
-        this.hunger3 = this.add.sprite(this.hunger2.x + 16, (14 * this.game.posMult) + 11, 'hungersq');
-        this.hunger3.fixedToCamera = true;
         this.hunger3.visible = false;
-        this.hunger4 = this.add.sprite(this.hunger3.x + 16, (14 * this.game.posMult) + 11, 'hungersq');
-        this.hunger4.fixedToCamera = true;
         this.hunger4.visible = false;
-        this.hunger5 = this.add.sprite(this.hunger4.x + 16, (14 * this.game.posMult) + 11, 'hungersq');
-        this.hunger5.fixedToCamera = true;
         this.hunger5.visible = false;
         switch(this.game.playerMaxHunger) {
             case 5:
@@ -2193,6 +2595,9 @@ DA5Game.game.prototype = {
                 break;
         }
         
+        if (this.game.playerHunger > this.game.playerMaxHunger)
+            this.game.playerHunger = this.game.playerMaxHunger;
+        
         switch(this.game.playerHunger) {
             case 0:
                 this.hunger1.alpha = 0.2;
@@ -2201,11 +2606,9 @@ DA5Game.game.prototype = {
             case 2:
                 this.hunger3.alpha = 0.2;
             case 3:
-                if (this.game.playerMaxHunger > 3)
-                    this.hunger4.alpha = 0.2;
+                this.hunger4.alpha = 0.2;
             case 4:
-                if (this.game.playerMaxHunger > 4)
-                    this.hunger5.alpha = 0.2;
+                this.hunger5.alpha = 0.2;
                 break;
             default:
                 break;
@@ -2213,20 +2616,23 @@ DA5Game.game.prototype = {
     },
     
     setThirst: function() {
-        this.thirst1 = this.add.sprite(9 * this.game.posMult, (14 * this.game.posMult) + 11, 'thirstsq');
-        this.thirst1.fixedToCamera = true;
+        if (this.initializeState) {
+            this.thirst1 = this.add.sprite(9 * this.game.posMult, (14 * this.game.posMult) + 11, 'thirstsq');
+            this.thirst1.fixedToCamera = true;
+            this.thirst2 = this.add.sprite(this.thirst1.x + 16, (14 * this.game.posMult) + 11, 'thirstsq');
+            this.thirst2.fixedToCamera = true;
+            this.thirst3 = this.add.sprite(this.thirst2.x + 16, (14 * this.game.posMult) + 11, 'thirstsq');
+            this.thirst3.fixedToCamera = true;
+            this.thirst4 = this.add.sprite(this.thirst3.x + 16, (14 * this.game.posMult) + 11, 'thirstsq');
+            this.thirst4.fixedToCamera = true;
+            this.thirst5 = this.add.sprite(this.thirst4.x + 16, (14 * this.game.posMult) + 11, 'thirstsq');
+            this.thirst5.fixedToCamera = true;
+        }
+        
         this.thirst1.visible = false;
-        this.thirst2 = this.add.sprite(this.thirst1.x + 16, (14 * this.game.posMult) + 11, 'thirstsq');
-        this.thirst2.fixedToCamera = true;
         this.thirst2.visible = false;
-        this.thirst3 = this.add.sprite(this.thirst2.x + 16, (14 * this.game.posMult) + 11, 'thirstsq');
-        this.thirst3.fixedToCamera = true;
         this.thirst3.visible = false;
-        this.thirst4 = this.add.sprite(this.thirst3.x + 16, (14 * this.game.posMult) + 11, 'thirstsq');
-        this.thirst4.fixedToCamera = true;
         this.thirst4.visible = false;
-        this.thirst5 = this.add.sprite(this.thirst4.x + 16, (14 * this.game.posMult) + 11, 'thirstsq');
-        this.thirst5.fixedToCamera = true;
         this.thirst5.visible = false;
         switch(this.game.playerMaxThirst) {
             case 5:
@@ -2241,35 +2647,24 @@ DA5Game.game.prototype = {
                 this.thirst1.visible = true;
                 break;
         }
+        if (this.game.playerThirst > this.game.playerMaxThirst)
+            this.game.playerThirst = this.game.playerMaxThirst;
+        
         switch(this.game.playerThirst) {
-                case 0:
-                    this.thirst5.alpha = 0.2;
-                    this.thirst4.alpha = 0.2;
-                    this.thirst3.alpha = 0.2;
-                    this.thirst2.alpha = 0.2;
-                    this.thirst1.alpha = 0.2;
-                    break;
-                case 1:
-                    this.thirst5.alpha = 0.2;
-                    this.thirst4.alpha = 0.2;
-                    this.thirst3.alpha = 0.2;
-                    this.thirst2.alpha = 0.2;
-                    break;
-                case 2:
-                    this.thirst5.alpha = 0.2;
-                    this.thirst4.alpha = 0.2;
-                    this.thirst3.alpha = 0.2;
-                    break;
-                case 3:
-                    this.thirst5.alpha = 0.2;
-                    this.thirst4.alpha = 0.2;
-                    break;
-                case 4:
-                    this.thirst5.alpha = 0.2;
-                    break;
-                default:
-                    break;
-            }
+            case 0:
+                this.thirst1.alpha = 0.2;
+            case 1:
+                this.thirst2.alpha = 0.2;
+            case 2:
+                this.thirst3.alpha = 0.2;
+            case 3:
+                this.thirst4.alpha = 0.2;
+            case 4:
+                this.thirst5.alpha = 0.2;
+                break;
+            default:
+                break;
+        }
     },
     
     timerInitialization: function() {
@@ -2706,7 +3101,7 @@ DA5Game.game.prototype = {
         }
     },
     
-    updateInventory: function() {
+    updateConsumables: function() {
         switch (this.game.medKit){
             case 0:
                 this.medKitInventory.frame = 0;
@@ -2766,7 +3161,7 @@ DA5Game.game.prototype = {
     },
     
     toggleInventory: function() {
-        if (this.inventoryState === false){
+        if (this.inventoryState === false && !this.game.paused){
             this.inventoryState = true;
             this.inventoryIcon.visible = false;
             this.consumablesCanvas.visible = true;
@@ -2776,8 +3171,14 @@ DA5Game.game.prototype = {
             this.pulseInventory.visible = true;
             this.timedial.visible = true;
             this.numLabel.visible = true;
+            
+            if (this.inventoryslot1 !== undefined)
+                this.inventoryslot1.visible = true;
+            
+            if (this.inventoryslot2 !== undefined)
+                this.inventoryslot2.visible = true;
         }
-        else {
+        else if (this.inventoryState === true && !this.game.paused){
             this.inventoryState = false;
             this.inventoryIcon.visible = true;
             this.consumablesCanvas.visible = false;
@@ -2787,10 +3188,20 @@ DA5Game.game.prototype = {
             this.pulseInventory.visible = false;
             this.timedial.visible = false;
             this.numLabel.visible = false;
+            
+            if (this.inventoryslot1 !== undefined)
+                this.inventoryslot1.visible = false;
+            
+            if (this.inventoryslot2 !== undefined)
+                this.inventoryslot2.visible = false;
         }
     },
     
     initializeHUD: function() {
+        this.darken = this.add.sprite(0, 0, 'darken');
+        this.darken.fixedToCamera = true;
+        this.darken.alpha = 0;
+        
         this.heart = this.add.sprite((0 * this.game.posMult) + 8, (14 * this.game.posMult) + 8, 'heart');
         this.heart.fixedToCamera = true;
         this.foodIco = this.add.sprite((4 * this.game.posMult) + 8, (14 * this.game.posMult) + 8, 'foodIco');
@@ -2818,14 +3229,10 @@ DA5Game.game.prototype = {
         this.medKitInventory.visible = false;
         this.shieldInventory.visible = false;
         this.pulseInventory.visible = false;
-        this.updateInventory();
+        this.updateConsumables();
         
         this.inventoryIcon.animations.add('toggle', [0, 1], 1, true);
-        this.inventoryIcon.animations.play('toggle');
-        
-        this.darken = this.add.sprite(0, 0, 'darken');
-        this.darken.fixedToCamera = true;
-        this.darken.alpha = 0;
+        this.inventoryIcon.animations.play('toggle');     
         
         switch (this.game.day){
             case 1:
@@ -2898,7 +3305,6 @@ DA5Game.game.prototype = {
                     default:
                         break;
                 }
-                console.log('randomEvent number: ' + this.game.randomEvent1);
                 if (this.game.randomEvent1 !== 0 && this.game.randomEvent1 !== 12) {
                     this.randomEventLabel.anchor.x = 0.5;
                     this.randomEventLabel.anchor.y = 0.5;
@@ -3005,7 +3411,18 @@ DA5Game.game.prototype = {
         this.craftMenu.visible = false;
         this.craftMenu.fixedToCamera = true;
         
-        //this.updateResourceText();
+        this.supplyPrompt = this.add.sprite(240, 240, 'supplyPrompt');
+        this.supplyPrompt.anchor.x = 0.5;
+        this.supplyPrompt.anchor.y = 0.5;
+        this.supplyPrompt.visible = false;
+        this.supplyPrompt.fixedToCamera = true;
+        
+        this.slotPrompt = this.add.sprite(240, 240, 'slotPrompt');
+        this.slotPrompt.anchor.x = 0.5;
+        this.slotPrompt.anchor.y = 0.5;
+        this.slotPrompt.visible = false;
+        this.slotPrompt.fixedToCamera = true;
+        
         if (this.game.resourceCount < 10)
             this.resourceText = this.add.text((3 * this.game.posMult) - 13, (10 * this.game.posMult) + 20, '  ' + this.game.resourceCount, { font: '16px Arial', fill: '#FFF'});
         else if (this.game.resourceCount < 100)
