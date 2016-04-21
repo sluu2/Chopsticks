@@ -40,7 +40,7 @@ DA5Game.worldgen.prototype = {
             this.game.day = 1;
             this.game.dayState = undefined;
             this.game.randomEvent1 = undefined;
-            this.game.infrared = true;
+            this.game.infrared = false;
         }
         
         // Drone Patrol Subgroup Move Times
