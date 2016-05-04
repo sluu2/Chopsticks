@@ -25,7 +25,7 @@ DA5Game.worldgen.prototype = {
             this.game.playerHealth = 3;
             this.game.playerHunger = 3;
             this.game.playerThirst = 3;
-            this.game.resourceCount = 500;
+            this.game.resourceCount = 0;
             
             // Player items reset
             this.game.slot1 = 0;
@@ -41,6 +41,7 @@ DA5Game.worldgen.prototype = {
             this.game.dayState = undefined;
             this.game.randomEvent1 = undefined;
             this.game.infrared = false;
+            this.game.maxTurrets = 0;
         }
         
         // Drone Patrol Subgroup Move Times
@@ -49,21 +50,31 @@ DA5Game.worldgen.prototype = {
         this.game.moveTime3 = this.rnd.integerInRange(0, 3) * Phaser.Timer.SECOND;
         this.game.moveTime4 = this.rnd.integerInRange(0, 3) * Phaser.Timer.SECOND;
         this.game.moveTime5 = this.rnd.integerInRange(0, 3) * Phaser.Timer.SECOND;
+        this.game.fireTime1 = this.rnd.integerInRange(1, 5) * Phaser.Timer.SECOND;
+        this.game.fireTime2 = this.rnd.integerInRange(1, 5) * Phaser.Timer.SECOND;
+        this.game.fireTime3 = this.rnd.integerInRange(1, 5) * Phaser.Timer.SECOND;
+        this.game.fireTime4 = this.rnd.integerInRange(1, 5) * Phaser.Timer.SECOND;
+        this.game.fireTime5 = this.rnd.integerInRange(1, 5) * Phaser.Timer.SECOND;
+        this.game.fireRate = 3;
+        this.game.fireSpeed = 100;
         
         /* STANDARD TIMERS */
         this.game.damageImmuneTime = 2 * Phaser.Timer.SECOND;       // Immunity duration before being able to be damaged by enemy
         this.game.healthDecay = 5 * Phaser.Timer.SECOND;            // Health Decay Rate if Hunger and/or Thirst is 0
-        this.game.thirstRestoreL = 1 * Phaser.Timer.SECOND;         // Thirst Restore Rate (Lake)
-        this.game.thirstRestoreR = 1.5 * Phaser.Timer.SECOND;       // Thirst Restore Rate (River)
-        this.game.foodRespawn = 5 * Phaser.Timer.SECOND;            // Time before food respawns after inactivity
-        this.game.eventLabelTimer = 4 * Phaser.Timer.SECOND;
+        this.game.thirstRestoreL = .5 * Phaser.Timer.SECOND;         // Thirst Restore Rate (Lake)
+        this.game.thirstRestoreR = .75 * Phaser.Timer.SECOND;       // Thirst Restore Rate (River)
+        this.game.objectRespawn = 4 * Phaser.Timer.SECOND;            // Time before food respawns after inactivity
+        this.game.eventLabelTimer = 1.5 * Phaser.Timer.SECOND;
         
         /* NON TUNABLE VARIABLES */
         this.game.losingHealth = false;     // Is the player losing health albeit has no hunger or thirst?
         this.game.interact = false;         // Is the player pressing the interact key?
         this.game.isSlowed = false;         // Is the player on a slowing tile?
-        this.game.dayCycle = 16 * Phaser.Timer.SECOND;      // Time between each cycle
-        this.game.pulseSpeed = 250
+        if (this.game.day == 1)
+            this.game.dayCycle = 30 * Phaser.Timer.SECOND;      // Time between each cycle
+        else
+            this.game.dayCycle = 45 * Phaser.Timer.SECOND;
+        this.game.pulseSpeed = 250;
         this.game.stunDuration = 5 * Phaser.Timer.SECOND;
         
         if (this.game.dayState === undefined || this.game.dayState === 'night'){
@@ -72,55 +83,55 @@ DA5Game.worldgen.prototype = {
         }
         else
             this.game.dayState = 'night';
-        
-        this.setEvent();
+        if (!this.game.bossState)
+            this.setEvent();
+        else
+            this.setBossVariables();
         this.spawningArrayInitialization();
 	},
 
 	update: function () {
+        if (this.game.menuTheme.isPlaying)
+            this.game.menuTheme.stop();
 	   	this.ready = true;
-        this.state.start('game');
+        
+        if (!this.game.bossState)
+            this.state.start('game');
+        else
+            this.state.start('boss');
 	},
     
     setEvent: function() {
-        console.log('Game Day: ' + this.game.day);
-        
-        if (this.game.randomEvent1 === 1 || this.game.randomEvent2 === 1) {         // ABUNDANCE
-            this.game.maxFood = 10;
-            this.game.numFood = 10;
-        }
-        else  if (this.game.randomEvent1 === 2 || this.game.randomEvent2 === 2) {   // FAMINE
-            this.game.maxFood = 3;
-            this.game.numFood = 3;
-        }
-        else {
+        if (this.game.randomEvent1 === 1 || this.game.randomEvent2 === 1)         // ABUNDANCE
+            this.game.maxFood = 12;
+        else  if (this.game.randomEvent1 === 2 || this.game.randomEvent2 === 2)   // FAMINE
             this.game.maxFood = 5;
-            this.game.numFood = 5;
-        }
+        else
+            this.game.maxFood = 8;
         
         
         if (this.game.randomEvent1 === 3 || this.game.randomEvent2 === 3)           // SURPLUS
-            this.game.maxResource = 10;
+            this.game.maxResource = 12;
         else if (this.game.randomEvent1 === 4 || this.game.randomEvent2 === 4)      // SCARCITY
-            this.game.maxResource = 3;
-        else 
             this.game.maxResource = 5;
+        else 
+            this.game.maxResource = 8;
         
         
         if (this.game.randomEvent1 === 5 || this.game.randomEvent2 === 5)                       // QUENCH
             this.game.thirstDecay = 15 * Phaser.Timer.SECOND;
         else if (this.game.randomEvent1 === 6 || this.game.randomEvent2 === 6)                  // DEHYDRATION
-            this.game.thirstDecay = 8 * Phaser.Timer.SECOND;
-        else
             this.game.thirstDecay = 10 * Phaser.Timer.SECOND;
+        else
+            this.game.thirstDecay = 12 * Phaser.Timer.SECOND;
         
         
         if (this.game.randomEvent1 === 7 || this.game.randomEvent2 === 7)                           // SATIATION
             this.game.hungerDecay = 15 * Phaser.Timer.SECOND;
         else if (this.game.randomEvent1 === 8 || this.game.randomEvent2 === 8)                      // STARVATION
-            this.game.hungerDecay = 8 * Phaser.Timer.SECOND;
-        else
             this.game.hungerDecay = 10 * Phaser.Timer.SECOND;
+        else
+            this.game.hungerDecay = 12 * Phaser.Timer.SECOND;
         
         
         if (this.game.randomEvent1 === 9 || this.game.randomEvent2 === 9)               // LOW ALERT
@@ -128,13 +139,20 @@ DA5Game.worldgen.prototype = {
         else if (this.game.randomEvent1 === 10 || this.game.randomEvent2 === 10)        // HIGH ALERT
             this.game.maxDrones = 15;
         else
-            this.game.maxDrones = 5;
+            this.game.maxDrones = 10;
         
         
         if (this.game.randomEvent1 === 11 || this.game.randomEvent2 === 11)             // AGILITY
-            this.game.droneSpeed = 75;
+            this.game.droneSpeed = 60;
         else
-            this.game.droneSpeed = 50;
+            this.game.droneSpeed = 40;
+    },
+    
+    setBossVariables: function() {
+        this.game.maxFood = 10;
+        this.game.maxResource = 10;
+        this.game.hungerDecay = 10 * Phaser.Timer.SECOND;
+        this.game.thirstDecay = 10 * Phaser.Timer.SECOND;
     },
     
     worldSeedCreate: function() {
