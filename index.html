@@ -1,10 +1,14 @@
 <!doctype html> 
 <html lang="en"> 
 <head> 
+    <!--
+    CS 480
+    3/22/17
+    Samuel Luu
+    -->
 	<meta charset="UTF-8" />
-    <title>Index</title>
+    <title>Chopsticks</title>
     
-    <!-- TRYING TO RELEARN CSS -->
     <style type="text/css">
         body {
             background-image: url(img/sky.png);
@@ -95,71 +99,18 @@
     </div>
     <div id="section_margin">
         <div id = "section">
-            <h1 class >Change Log (v0.3 alpha)</h1>
-            <ul class="a">
-                <li>Supply Drop Zone implementation is functional</li>
-                <li>2-slot inventory implementationn is functional</li>
-                <li>Some performance optimization fixes</li>
-            </ul>
+            <h1>Chopsticks</h1>
+            <p>Chopsticks is a two player game in which players extend a number of fingers from each hand and transfers those scores by taking turns to tap one hand to another. To win the game, a player must force the other player to extend all of their fingers and thumbs on both hands. (<strong>Note:</strong> when a hand has all their fingers extended, it is called a “dead hand”, and is out of play)</p>
             
-            <p><strong>Change Log (v0.2 alpha)</strong></p>
+            <p>The game begins with each player having one finger extended on each hand. Players take turns to tap one of their hands that is not “dead” against one of his or her opponent’s hands that is not “dead”. The number of points on the tapping hand is added to the number on the tapped hand, and the player with the tapped hand extends their digits to show the new score (The tapping hand remains unchanged). If the tapped hand’s score is five or greater, then it is removed from play and cannot be used to attack or be targeted. We’ll represent the dead hand as having a score of 0.</p>
+            <p>Splitting is a move that can be used to revive a dead hand by transferring the score from a player’s non-dead hand to their other hand that is dead. For example, if a player has 0/2 (that is, one dead hand and the other hand having 2 points), he or she may split 1/1 and revive the dead hand.</p>
+            <p>The variation of Chopsticks that I’ll be implementing will only allow splitting for an even amount of points. So a hand of 0/4 can be split to 2/2 and a hand of 0/2 can be split to 1/1. This will allow for the game to not drag on indefinitely.</p>
+           
+            <h1 class >About</h1>
             <ul class="a">
-                <li>Functional Resource Crafting Menu (C) added</li>
-                <li>Altered Map starting color scheme</li>
-                <li>Functional consumable items added: Medkit (Q), Shield (E), and Pulse Rounds (Directional Arrows)</li>
-                <li>Functional Quit Menu added</li>
-                <li>Inventory added (I) with a time indicator, consumables count, as well as inventory slots (to be added)</li>
+                <li>All images were created by Samuel Luu and implemented for the purpose of the Game Assignment for CS 480 - Introduction to Artificial Intelligence</li>
+                <li>Last edited: 3/22/17</li>
             </ul>
-            
-            <p><strong>Change Log (v0.1 alpha)</strong></p>
-            <ul class="a">
-                <li>Game Concept Created</li>
-                <li>Player, Drone, Food, and Resource objects added</li>
-                <li>Tilemap added</li>
-                <li>Map Generation Algorithm added to be used for procedural generation</li>
-                <li>Tilemap Collisions and Map collisions/overlaps added</li>
-                <li>Player HUD added</li>
-                <li>Drone AI Patrol Algorithm added</li>
-                <li>Stat decay over time added</li>
-                <li>Day/Night Cycle added</li>
-                <li>Event Generation Algorithm added</li>
-                <li>Temporary Menus added</li>
-            </ul>
-            
-            <h1>Future Features in Progress</h1>
-            <ul class="a">
-                <li>Resource-based crafting system to create med packs and ammo</li>
-                <li>Beneficial items that change player stats</li>
-                <li>Supply drop system</li>
-                <li>Player Inventory consisting of items equipped and consumables</li>
-                <li>Lose/Win State Splashscreens</li>
-                <li>Menu splashscreen</li>
-                <li>Pause/Exit Menu</li>
-                <li>Sound Effects and Background Music</li>
-            </ul>
-            
-            <h1>PROJECT DA5 PROTOTYPE</h1>
-            <p><strong>High Concept: </strong>Thrown into an unfamiliar and changing environment and given only a basic shelter, the player must survive the harsh environment by gathering resources while avoiding the death drones looking to kill you.</p>
-            <p><strong>Player Experience Goals: </strong>The goal of this game is to give the player a sense of openess despite being in a limited environment by using procedurally generated levels and events. By giving the player random items and the ability to choose which items to keep and discard, the player's play style will change depending on his or her choices.</p>
-            <p><strong>Genre:</strong> Survival Horror / RPG / Life Simulator</p>
-            <p><strong>Game play:</strong> The player will have to navigate the environment (using the WASD keys) to collect gather resources from the environment while avoiding the council’s death drones. The player will have to find and collect food that is randomly scattered around the world and collect water (by holding the SPACEBAR) from the rivers and lakes in the world or else his or her health will begin to deteriorate, leading to the end of the game. During certain intervals, a supply item will be dropped in the supply drop zone that will contain a random item that will cause either benefit or a combination of benefit and harm to the player if he or she chooses to use the item.</p>
-            <p><strong>Prototype Goal:</strong> Taking the skills aquired from the previous digital assignments, this assignment will focus mostly on algorithms used for procedurally generated levels, events, and item drops. The goal of this project is to create a game similar to what is seen on online game libraries.</p>
-            <p><strong>Features:</strong> This game will include numerous features that are built and improved from my other games which would include:</p>
-            <ul class="a">
-                <li>Procedurally generated levels through use of algorithms, meaning that the environment that you’re playing may be different from another person playing the game.</li>
-                <li>Randomly generated food spawning and drone spawning based on the procedurally generated environment</li>
-                <li>Health, Hunger, and Thirst System (as seen in games like Minecraft)  </li>
-                <li>Day/Night Cycle</li>
-                <li>RPG items that will improve player health, hunger, thirst stats or improve tools</li>
-                <li>Permanent Death</li>
-            </ul>
-            <p><strong>Setting/Premise:</strong> This game is set in a dystopian world in the year PB95, in which the current reigning empire is testing out a death coliseum to be used for entertainment. </p>
-            <p><strong>Story:</strong>  To fully test out the effectiveness of the death environment, the emperor declared that all adolescent squares from the size of 8 – 24 pixels will be chosen at random to participate in this death game. You, the player, are chosen to participate by fate, poor life choices, and by the fact that this game wouldn’t exist if you weren’t selected. There is a shred of hope, as your warden and best friend, Bob, promises to send food and supplies to you occasionally when the other guards or out on patrol.</p>
-            <p><strong>Target Audience:</strong>This game is targeted towards gamers who are a keen interesting rogue-like RPG games.</p>
-            <p><strong>Play time:</strong> This game is bounded by timers to keep track of the day/night cycles. Keeping that in mind, the total play time expected would be ~21 minutes.</p>
-            <p><strong>Strategies:</strong> Player strategy will change as the days increase due to the changing game rules. Thus, the player will have to orient themselves toward resources and lure drones away from resources when needed.</p>
-            <p><strong>Prototype Assets: </strong>All assets used currently in the game were created from scratch.</p>
-            <p><strong>Prototype Closest Other Game:</strong> Minecraft.</p>
         </div>
     </div>
 </body>
