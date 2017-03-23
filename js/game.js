@@ -742,7 +742,16 @@ Chopsticks.game.prototype = {
                 this.AIrandomRight();
         }
         else if ((pA == 1 && pB == 2) || (pA == 2 && pB == 1)) {
-            this.AIrandomAttack();
+            if (this.aLH == 2)
+                if (pA == 1)
+                    this.AtoA();
+                else
+                    this.AtoB();
+            else
+                if (pA == 1)
+                    this.BtoA();
+                else
+                    this.BtoB();
         }
         else if ((pA == 1 && pB == 3) || (pA == 3 && pB == 1)) {
             if (this.aLH == 2)
