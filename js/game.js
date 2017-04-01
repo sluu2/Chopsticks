@@ -15,6 +15,7 @@ Chopsticks.game.prototype = {
     create: function(){
         this.background = this.add.sprite(0, 0, 'background');  //Create Background
         this.turn = this.rnd.integerInRange(1,2);
+        this.turn = 2;      //remove later
         if (this.turn == 2) {
             this.turn = -1;
             this.background.frame = 1;
@@ -125,7 +126,7 @@ Chopsticks.game.prototype = {
         
         //Set Initial Variables
         this.pLH = 1;
-        this.pRH = 1;
+        this.pRH = 0;
         
         this.sL = 0;
         this.sR = 0;
@@ -153,7 +154,7 @@ Chopsticks.game.prototype = {
         this.aRHSB.onInputUp.add(this.aSelectRight, this);
         
         //Set Initial Variables
-        this.aLH = 1;
+        this.aLH = 2;
         this.aRH = 1;
         this.updateAI();
         this.alt = this.time.create(false);
