@@ -1005,7 +1005,10 @@ Chopsticks.game.prototype = {
                 this.AIrandomRight();
         }
         else if ((pA == 1 && pB == 2) || (pA == 2 && pB == 1)) {
-            this.AIrandomAttack();
+            if (this.aLH == 4)
+                this.AIrandomLeft();
+            else
+                this.AIrandomRight();
         }
         else if ((pA == 1 && pB == 3) || (pA == 3 && pB == 1)) {
             if (this.aLH == 4)
