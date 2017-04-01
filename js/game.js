@@ -801,10 +801,16 @@ Chopsticks.game.prototype = {
             this.AIrandomAttack();
         }
         else if ((pA == 1 && pB == 0) || (pA == 0 && pB == 1)) {
-            if (pA == 1)
-                this.AIrandomLeftInverse();
+            if (this.aLH == 1)
+                if (pA == 1)
+                    this.AtoA();
+                else
+                    this.AtoB();
             else
-                this.AIrandomRightInverse();
+                if (pA == 1)
+                    this.BtoA();
+                else
+                    this.BtoB();
         }
         else if (pA == 2 && pB == 2) {
              this.AIrandomAttack()
