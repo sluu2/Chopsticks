@@ -489,6 +489,11 @@ Chopsticks.game.prototype = {
     /*-------------------------------------------------------- AI ----------------------------------------------------------------*/
     
     AIDecisionHead: function(aA, aB, pA, pB) {
+        console.log('aLH: ' + this.aLH);
+        console.log('aLH: ' + this.aRH);
+        console.log('aLH: ' + this.pLH);
+        console.log('aLH: ' + this.pRH);
+        console.log('------');
         if (aA == 1 && aB == 1)
             this.sd_11(pA, pB);
         else if ((aA == 1 && aB == 2) || (aA == 2 && aB == 1))
@@ -742,16 +747,43 @@ Chopsticks.game.prototype = {
                 this.AIrandomRight();
         }
         else if ((pA == 1 && pB == 2) || (pA == 2 && pB == 1)) {
-            if (this.aLH == 2)
-                if (pA == 1)
-                    this.AtoA();
+            this.poison = this.rnd.integerInRange(1,3);
+            if (this.poison == 1) {
+                if (this.aLH == 1)
+                    if (pA == 1)
+                        this.AtoA();
+                    else
+                        this.AtoB();
                 else
-                    this.AtoB();
-            else
-                if (pA == 1)
-                    this.BtoA();
+                    if (pA == 1)
+                        this.BtoA();
+                    else
+                        this.BtoB();
+            }
+            else if (this.poison == 2) {
+                if (this.aLH == 2)
+                    if (pA == 1)
+                        this.AtoA();
+                    else
+                        this.AtoB();
                 else
-                    this.BtoB();
+                    if (pA == 1)
+                        this.BtoA();
+                    else
+                        this.BtoB();
+            }
+            else {
+                if (this.aLH == 2)
+                    if (pA == 2)
+                        this.AtoA();
+                    else
+                        this.AtoB();
+                else
+                    if (pA == 2)
+                        this.BtoA();
+                    else
+                        this.BtoB();
+            }
         }
         else if ((pA == 1 && pB == 3) || (pA == 3 && pB == 1)) {
             if (this.aLH == 2)
@@ -766,10 +798,7 @@ Chopsticks.game.prototype = {
                     this.BtoB();
         }
         else if ((pA == 1 && pB == 4) || (pA == 4 && pB == 1)) {
-            if (pA == 4)
-                this.AtoA();
-            else
-                this.BtoB();
+            this.AIrandomAttack();
         }
         else if ((pA == 1 && pB == 0) || (pA == 0 && pB == 1)) {
             if (pA == 1)
@@ -873,6 +902,7 @@ Chopsticks.game.prototype = {
                 this.AtoA();
             else
                 this.BtoB();
+            
         }
         else if ((pA == 1 && pB == 0) || (pA == 0 && pB == 1)) {
             if (this.aLH == 3)
@@ -887,31 +917,28 @@ Chopsticks.game.prototype = {
                     this.BtoB();
         }
         else if (pA == 2 && pB == 2) {
-            if (this.aLH == 3)
-                this.AIrandomLeft();
-            else
-                this.AIrandomRight();
+            this.AIrandomAttack();
         }
         else if ((pA == 2 && pB == 3) || (pA == 3 && pB == 2)) {
             if (this.aLH == 3)
-                if (pA == 2)
+                if (pA == 3)
                     this.AtoA();
                 else
                     this.AtoB();
             else
-                if (pA == 2)
+                if (pA == 3)
                     this.BtoA();
                 else
                     this.BtoB();
         }
         else if ((pA == 2 && pB == 4) || (pA == 4 && pB == 2)) {
-            if (this.aLH == 3)
-                if (pA == 4)
+            if (this.aLH == 1)
+                if (pA == 2)
                     this.AtoA();
                 else
                     this.AtoB();
             else
-                if (pA == 4)
+                if (pA == 2)
                     this.BtoA();
                 else
                     this.BtoB();
@@ -972,16 +999,7 @@ Chopsticks.game.prototype = {
                 this.AIrandomRight();
         }
         else if ((pA == 1 && pB == 2) || (pA == 2 && pB == 1)) {
-            if (this.aLH == 4)
-                if (pA == 2)
-                    this.AtoA();
-                else
-                    this.AtoB();
-            else
-                if (pA == 2)
-                    this.BtoA();
-                else
-                    this.BtoB();
+            this.AIrandomAttack();
         }
         else if ((pA == 1 && pB == 3) || (pA == 3 && pB == 1)) {
             if (this.aLH == 4)
@@ -1054,10 +1072,28 @@ Chopsticks.game.prototype = {
         }
         
         else if (pA == 3 && pB == 3) {
-            this.AIrandomAttack();
+            if (this.aLH == 1)
+                if (pA == 4)
+                    this.AtoA();
+                else
+                    this.AtoB();
+            else
+                if (pA == 4)
+                    this.BtoA();
+                else
+                    this.BtoB();
         }
         else if ((pA == 3 && pB == 4) || (pA == 4 && pB == 3)) {
-            this.AIrandomAttack();
+            if (this.aLH == 4)
+                if (pA == 3)
+                    this.AtoA();
+                else
+                    this.AtoB();
+            else
+                if (pA == 3)
+                    this.BtoA();
+                else
+                    this.BtoB();
         }
         else if ((pA == 3 && pB == 0) || (pA == 0 && pB == 3)) {
             if (this.aLH == 4)
@@ -1115,7 +1151,12 @@ Chopsticks.game.prototype = {
                     this.BtoB();
         }
         else if ((pA == 2 && pB == 4) || (pA == 4 && pB == 2)) {
-            if (this.aLH == 2)
+            this.poison = this.rnd.integerInRange(1,2);
+            if (this.poison == 1) {
+                this.splitHand();
+            }
+            else {
+                 if (this.aLH == 2)
                 if (pA == 4)
                     this.AtoA();
                 else
@@ -1125,6 +1166,7 @@ Chopsticks.game.prototype = {
                     this.BtoA();
                 else
                     this.BtoB();
+            }
         }
         else if ((pA == 2 && pB == 0) || (pA == 0 && pB == 2)) {
             this.splitHand();
@@ -1339,22 +1381,10 @@ Chopsticks.game.prototype = {
     
     sd_24: function(pA, pB) {
         if (pA == 1 && pB == 1) {
-            if (this.aLH == 2)
-                this.AIrandomLeft();
-            else
-                this.AIrandomRight();
+            this.AIrandomAttack();
         }
         else if ((pA == 1 && pB == 2) || (pA == 2 && pB == 1)) {
-            if (this.aLH == 2)
-                if (pA == 1)
-                    this.AtoA();
-                else
-                    this.AtoB();
-            else
-                if (pA == 1)
-                    this.BtoA();
-                else
-                    this.BtoB();
+            this.AIrandomAttack();
         }
         else if ((pA == 1 && pB == 3) || (pA == 3 && pB == 1)) {
             if (this.aLH == 2)
